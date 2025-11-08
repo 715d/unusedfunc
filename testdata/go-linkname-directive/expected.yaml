@@ -1,0 +1,18 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/go-linkname-directive.unusedRegular"
+        reason: "unexported function not used"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/go-linkname-directive.notReallyLinked"
+        reason: "invalid linkname directive (has space)"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/go-linkname-directive.anotherUnused"
+        reason: "unexported function not used"
+        file: "linked_external.go"
+      - func: "github.com/715d/unusedfunc/testdata/go-linkname-directive.callsLinkedFunction"
+        reason: "unexported function not used"
+        file: "linked_external.go"
+    expected_errors: []

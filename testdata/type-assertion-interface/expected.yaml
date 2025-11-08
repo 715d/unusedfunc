@@ -1,0 +1,22 @@
+# Test case: Marker methods required for interface type assertions
+# 
+# This tests detection of methods that are never directly called but are
+# required for type assertions and errors.As to work correctly.
+#
+# Expected behavior:
+# - AppError.IsCustom and ValidationError.IsCustom should NOT be reported (required for interface)
+# - UnusedError.Error and UnusedError.unusedMethod SHOULD be reported (type never used)
+
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      # Only UnusedError methods should be reported as unused
+      - func: "github.com/715d/unusedfunc/testdata/type-assertion-interface.UnusedError.Error"
+        reason: "type never used"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/type-assertion-interface.UnusedError.unusedMethod"
+        reason: "method never called"
+        file: "main.go"
+    expected_errors: []

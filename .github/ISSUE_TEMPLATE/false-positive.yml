@@ -1,0 +1,141 @@
+name: False Positive Report
+description: Report a function incorrectly flagged as unused
+title: "[False Positive]: "
+labels: ["false-positive", "bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping us improve unusedfunc! Please provide details about the false positive.
+
+  - type: textarea
+    id: function-info
+    attributes:
+      label: Function Information
+      description: Details about the function incorrectly reported as unused
+      placeholder: |
+        Function name: handleRequest
+        Package: github.com/example/pkg
+        File: pkg/handler.go:123
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-used
+    attributes:
+      label: Why is this function actually used?
+      description: Explain how the function is used (e.g., via reflection, interface implementation, etc.)
+      placeholder: |
+        This function is called via reflect.MethodByName() in our RPC framework.
+
+        Example usage:
+        ```go
+        method := reflect.ValueOf(h).MethodByName("handleRequest")
+        method.Call(args)
+        ```
+    validations:
+      required: true
+
+  - type: dropdown
+    id: usage-pattern
+    attributes:
+      label: Usage Pattern
+      description: How is the function accessed?
+      options:
+        - Direct function call (should not be reported!)
+        - reflect.MethodByName()
+        - Interface implementation
+        - Called from generated code
+        - Called from assembly
+        - Test framework discovery
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: minimal-example
+    attributes:
+      label: Minimal Reproducible Example
+      description: Provide a minimal code example that demonstrates the issue
+      placeholder: |
+        ```go
+        package main
+
+        import "reflect"
+
+        type Handler struct{}
+
+        func (h *Handler) Process() {}
+
+        func main() {
+            h := &Handler{}
+            reflect.ValueOf(h).MethodByName("Process").Call(nil)
+        }
+        ```
+      render: go
+    validations:
+      required: false
+
+  - type: textarea
+    id: unusedfunc-output
+    attributes:
+      label: unusedfunc Output
+      description: Copy the output from unusedfunc showing the false positive
+      placeholder: |
+        pkg/handler.go:123:1 handleRequest
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: unusedfunc Version
+      description: What version of unusedfunc are you using?
+      placeholder: "v1.1.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: cli-flags
+    attributes:
+      label: CLI Flags Used
+      description: What flags did you pass to unusedfunc?
+      placeholder: |
+        unusedfunc --skip-generated=false ./...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: generated-code
+    attributes:
+      label: Is this in generated code?
+      description: Is the false positive in a file with "// Code generated" header?
+      options:
+        - "No"
+        - "Yes - protobuf (.pb.go)"
+        - "Yes - other generated code"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: workaround
+    attributes:
+      label: Have you tried these workarounds?
+      options:
+        - label: "Used --skip-generated flag (if in generated code)"
+        - label: "Added //nolint:unusedfunc suppression comment"
+        - label: "Verified the function is actually used"
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context or information that might help us understand the issue
+      placeholder: |
+        - This happens with all methods on types that implement interface X
+        - Only affects code using framework Y
+        - Related to issue #123
+    validations:
+      required: false

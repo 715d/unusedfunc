@@ -1,0 +1,8 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/interface-empty-marker-methods.*UnusedValidator.isValidator"
+        reason: "unexported and unused"
+    expected_errors: []

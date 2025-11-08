@@ -1,0 +1,24 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/runtime-directives.UnusedRegular"
+        reason: "unexported function not used"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/runtime-directives.runtimeLookingName"
+        reason: "no runtime directives, not used"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/runtime-directives.invalidDirective"
+        reason: "invalid directive format (has space)"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/runtime-directives.UnusedHook"
+        reason: "not registered in hooks"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/runtime-directives.unusedHook1"
+        reason: "not registered anywhere"
+        file: "hooks.go"
+      - func: "github.com/715d/unusedfunc/testdata/runtime-directives.unusedHook2"
+        reason: "not registered anywhere"
+        file: "hooks.go"
+    expected_errors: []

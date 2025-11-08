@@ -1,0 +1,15 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: true
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/cgo-export-directive.UnusedHelper"
+        reason: "unexported function not used"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/cgo-export-directive.GoNotReallyExported"
+        reason: "invalid export syntax (not in comment)"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/cgo-export-directive.UnusedCGoHelper"
+        reason: "unexported function not used"
+        file: "helper.go"
+    expected_errors: []

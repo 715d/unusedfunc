@@ -1,0 +1,8 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/generic-method-calls.*Container[T].unusedHelper"
+        reason: "unexported function not used"
+    expected_errors: []

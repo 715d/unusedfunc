@@ -1,0 +1,28 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      # Main package
+      - func: "blank_imports.UnusedMainFunc"
+        reason: "not used anywhere"
+        file: "main.go"
+      
+      # MySQL driver
+      - func: "blank_imports/drivers/mysql.parseConfig"
+        reason: "helper not used"
+        file: "drivers/mysql/driver.go"
+      - func: "blank_imports/drivers/mysql.validateConnection"
+        reason: "helper not used"
+        file: "drivers/mysql/driver.go"
+      
+      # PostgreSQL driver
+      - func: "blank_imports/drivers/postgres.unusedPostgresHelper"
+        reason: "not used"
+        file: "drivers/postgres/driver.go"
+      
+      # Registry package
+      - func: "blank_imports/registry.unusedHook"
+        reason: "not registered"
+        file: "registry/hooks.go"
+    expected_errors: []

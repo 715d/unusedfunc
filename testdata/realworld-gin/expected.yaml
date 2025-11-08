@@ -1,0 +1,10 @@
+repository:
+  url: "https://github.com/gin-gonic/gin"
+  ref: "v1.9.1"
+  subdir: ""
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused: []
+    expected_errors: []

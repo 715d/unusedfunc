@@ -1,0 +1,16 @@
+build_configurations:
+  - name: "amd64"
+    build_tags: []
+    enable_cgo: false
+    goarch: "amd64"
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/assembly-implementation.UnusedFunction"
+        reason: "unexported function not used"
+        file: "math.go"
+      - func: "github.com/715d/unusedfunc/testdata/assembly-implementation.EmptyNotAsm"
+        reason: "empty function without assembly implementation"
+        file: "math.go"
+      - func: "github.com/715d/unusedfunc/testdata/assembly-implementation.MatrixMultiply"
+        reason: "unexported function not used"
+        file: "math.go"
+    expected_errors: []

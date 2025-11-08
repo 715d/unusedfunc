@@ -1,0 +1,7 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/interface-calls-unexported.saveAssociation"
+    expected_errors: []

@@ -1,0 +1,7 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    # All interface methods should be marked as used due to type assertion
+    expected_unused: []
+    expected_errors: []

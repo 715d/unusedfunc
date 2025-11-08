@@ -1,0 +1,6 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused: []
+    expected_errors: []

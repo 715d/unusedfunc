@@ -1,0 +1,12 @@
+repository:
+  url: "https://github.com/go-chi/chi"
+  ref: "v5.0.12"
+  subdir: ""
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/go-chi/chi/v5.debugPrintTree"
+        reason: "unexported function not used"
+    expected_errors: []

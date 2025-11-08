@@ -1,0 +1,24 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/multiple-unused-methods.*User.setInternal"
+        reason: "unexported function not used"
+      - func: "github.com/715d/unusedfunc/testdata/multiple-unused-methods.*User.calculateScore"
+        reason: "unexported function not used"
+      - func: "github.com/715d/unusedfunc/testdata/multiple-unused-methods.*Admin.removeAllPermissions"
+        reason: "unexported function not used"
+      - func: "github.com/715d/unusedfunc/testdata/multiple-unused-methods.*User.formatDisplay"
+        reason: "unexported function not used"
+      - func: "github.com/715d/unusedfunc/testdata/multiple-unused-methods.*User.SetPassword"
+        reason: "unexported function not used"
+      - func: "github.com/715d/unusedfunc/testdata/multiple-unused-methods.*User.GetPassword"
+        reason: "unexported function not used"
+      - func: "github.com/715d/unusedfunc/testdata/multiple-unused-methods.*User.Deactivate"
+        reason: "unexported function not used"
+      - func: "github.com/715d/unusedfunc/testdata/multiple-unused-methods.*User.Clone"
+        reason: "unexported function not used"
+      - func: "github.com/715d/unusedfunc/testdata/multiple-unused-methods.helperFunction"
+        reason: "unexported function not used"
+    expected_errors: []

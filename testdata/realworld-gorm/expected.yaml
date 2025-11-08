@@ -1,0 +1,10 @@
+repository:
+  url: "https://github.com/go-gorm/gorm"
+  ref: "v1.25.7"
+  subdir: ""
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused: []
+    expected_errors: []

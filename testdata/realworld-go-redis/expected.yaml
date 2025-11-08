@@ -1,0 +1,16 @@
+repository:
+  url: "https://github.com/redis/go-redis"
+  ref: "v9.5.1"
+  subdir: ""
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/redis/go-redis/v9/internal/pool.*Conn.NetConn"
+        reason: "exported function in internal package not used"
+      - func: "github.com/redis/go-redis/v9/internal/pool.*Conn.SetCreatedAt"
+        reason: "exported function in internal package not used"
+      - func: "github.com/redis/go-redis/v9/internal/pool.*StickyConnPool.Reset"
+        reason: "exported function in internal package not used"
+    expected_errors: []

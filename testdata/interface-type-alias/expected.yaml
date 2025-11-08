@@ -1,0 +1,10 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      # TimeType.ScanRedis should NOT be reported as unused because:
+      # - It implements the Scanner interface (through type alias)
+      # - Scanner is used through type assertion in production code
+      # - Even though TimeType is only defined in test file
+      []

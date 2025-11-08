@@ -1,0 +1,10 @@
+repository:
+  url: "https://github.com/gorilla/websocket"
+  ref: "v1.5.1"
+  subdir: ""
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused: []
+    expected_errors: []
