@@ -1,0 +1,32 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/test/integration.*Executor.DefaultOperation"
+        reason: "method not used"
+      - func: "github.com/test/integration.*UnsafeStruct.UnsafeOperation"
+        reason: "method not used"
+      - func: "github.com/test/integration.*Executor.ValidateOperation"
+        reason: "method not used"
+      - func: "github.com/test/integration.*DebugStruct.PrintDebugInfo"
+        reason: "method not used"
+      - func: "github.com/test/integration.*UnsafeStruct.GetPointer"
+        reason: "method not used"
+      - func: "github.com/test/integration.*Handler.Validate"
+        reason: "method not used"
+      - func: "github.com/test/integration.*DebugStruct.EnableDebug"
+        reason: "method not used"
+      - func: "github.com/test/integration.*Calculator.SquareRoot"
+        reason: "method not used"
+      - func: "github.com/test/integration.*Processor.DebugHandler"
+        reason: "method not used"
+      - func: "github.com/test/integration.*FileLogger.Flush"
+        reason: "method not used"
+      - func: "github.com/test/integration.*ComplexWriter.Flush"
+        reason: "method not used"
+      - func: "github.com/test/integration.*ComplexWriter.Close"
+        reason: "method not used"
+      - func: "github.com/test/integration.*BaseLogger.Error"
+        reason: "method not used"
+    expected_errors: []

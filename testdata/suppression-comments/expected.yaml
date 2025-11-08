@@ -1,0 +1,12 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/suppression-comments.*Calculator.Divide"
+        reason: "method not used"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/suppression-comments.*Handler.Process"
+        reason: "method not used"
+        file: "main.go"
+    expected_errors: []

@@ -1,0 +1,8 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: github.com/715d/unusedfunc/testdata/interface-implicit-conversions.*MyReader.Read
+        reason: method is never used because type is never used (and in a non-importable package)
+    expected_errors: []

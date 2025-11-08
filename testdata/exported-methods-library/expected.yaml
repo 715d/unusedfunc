@@ -1,0 +1,22 @@
+# Test case: Exported methods in library packages should be entry points
+# 
+# Expected behavior:
+# - PublicMethod (exported method) should be an entry point
+# - privateHelper (called by PublicMethod) should NOT be reported as unused
+# - unusedPrivateMethod (never called) SHOULD be reported as unused
+# - PublicFunction (exported function) should be an entry point  
+# - helperFunction (called by PublicFunction) should NOT be reported as unused
+# - unusedFunction (never called) SHOULD be reported as unused
+
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/exported-methods-library.*Client.unusedPrivateMethod"
+        reason: "unexported method never called"
+        file: "lib.go"
+      - func: "github.com/715d/unusedfunc/testdata/exported-methods-library.unusedFunction"
+        reason: "unexported function never called"
+        file: "lib.go"
+    expected_errors: []

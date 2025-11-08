@@ -1,0 +1,24 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/init-chain-calls.unusedInInit"
+        reason: "not called from any init"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/init-chain-calls.unusedHelper"
+        reason: "not used anywhere"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/init-chain-calls.*Registry.unregister"
+        reason: "method not used"
+        file: "main.go"
+      - func: "github.com/715d/unusedfunc/testdata/init-chain-calls.*UnusedPlugin.Name"
+        reason: "plugin not registered"
+        file: "plugins.go"
+      - func: "github.com/715d/unusedfunc/testdata/init-chain-calls.*UnusedPlugin.Initialize"
+        reason: "plugin not registered"
+        file: "plugins.go"
+      - func: "github.com/715d/unusedfunc/testdata/init-chain-calls.unusedHandlerFactory"
+        reason: "not registered"
+        file: "plugins.go"
+    expected_errors: []

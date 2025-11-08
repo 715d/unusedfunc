@@ -1,0 +1,10 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/basic-unused-detection.*User.GetEmail"
+        reason: "unexported function not used"
+      - func: "github.com/715d/unusedfunc/testdata/basic-unused-detection.*User.setInternal"
+        reason: "unexported function not used"
+    expected_errors: []

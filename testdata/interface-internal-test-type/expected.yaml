@@ -1,0 +1,16 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused: []
+    # The bug is that our tool incorrectly reports this as unused:
+    # - github.com/715d/unusedfunc/testdata/interface-internal-test-type/internal/hscan.*TimeRFC3339Nano.ScanRedis
+    #
+    # This method SHOULD NOT be reported as unused because:
+    # 1. It implements the Scanner interface
+    # 2. The interface is used via reflection type assertion in production code (scanner.go)
+    # 3. Even though the test doesn't directly call ScanValue with this type,
+    #    the type implements an interface that IS used in production
+    #
+    # This test WILL FAIL until we fix the bug in RTA's handleTypeAssert
+    # The failure will show: "unexpected unused function" for TimeRFC3339Nano.ScanRedis

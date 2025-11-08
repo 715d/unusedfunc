@@ -1,0 +1,135 @@
+name: Bug Report
+description: Report a bug or unexpected behavior (not related to false positives/negatives)
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug!
+
+        **Note**: If you're reporting incorrect analysis results, please use:
+        - [False Positive Report](https://github.com/715d/unusedfunc/issues/new?template=false-positive.yml) - function incorrectly reported as unused
+        - [False Negative Report](https://github.com/715d/unusedfunc/issues/new?template=false-negative.yml) - unused function not reported
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of the bug
+      placeholder: When I run unusedfunc with --build-tags=integration, the tool crashes with a panic.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this issue?
+      placeholder: |
+        1. Clone repository X
+        2. Run `unusedfunc --build-tags=integration ./...`
+        3. See panic
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: The tool should analyze the code without crashing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened? Include error messages, stack traces, or unexpected output.
+      placeholder: |
+        panic: runtime error: invalid memory address or nil pointer dereference
+        [signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x...]
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Information about your environment
+      placeholder: |
+        - unusedfunc version: v1.1.0
+        - Go version: go1.23.0
+        - OS: macOS 14.1 (darwin/arm64)
+        - Installation method: go install / built from source / release binary
+    validations:
+      required: true
+
+  - type: textarea
+    id: minimal-example
+    attributes:
+      label: Minimal Reproducible Example
+      description: If possible, provide minimal code that reproduces the issue
+      placeholder: |
+        ```go
+        // minimal.go
+        package main
+
+        func main() {
+            // Code that triggers the bug
+        }
+        ```
+      render: go
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or Additional Output
+      description: Any additional logs, verbose output, or debug information
+      placeholder: |
+        $ unusedfunc -v ./...
+        [verbose output here]
+      render: shell
+    validations:
+      required: false
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How does this affect your usage?
+      options:
+        - "Critical - tool unusable / data loss"
+        - "High - major feature broken"
+        - "Medium - workaround exists"
+        - "Low - minor annoyance"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I've searched existing issues for duplicates
+          required: true
+        - label: I'm using the latest version of unusedfunc
+          required: true
+        - label: I've read the [Known Limitations](https://github.com/715d/unusedfunc/blob/main/README.md#known-limitations) section
+          required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Anything else that might help us understand and fix the issue
+      placeholder: |
+        - This started happening after upgrading Go
+        - Only affects certain package patterns
+        - Related to issue #123
+    validations:
+      required: false

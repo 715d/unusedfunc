@@ -1,0 +1,120 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod verify
+
+builds:
+  - id: unusedfunc
+    main: ./cmd/unusedfunc
+    binary: unusedfunc
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.buildTime={{.Date}}
+      - -X main.gitCommit={{.ShortCommit}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}-
+      {{- .Version }}-
+      {{- .Os }}-
+      {{- .Arch }}
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Performance
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Other Changes
+      order: 999
+
+nix:
+  - name: unusedfunc
+    repository:
+      owner: 715d
+      name: nur
+      token: "{{ .Env.NIX_GITHUB_TOKEN }}"
+    homepage: https://github.com/715d/unusedfunc
+    description: Go linter detecting unused functions with /internal awareness
+    path: pkgs/unusedfunc/default.nix
+    license: bsd3
+
+release:
+  github:
+    owner: 715d
+    name: unusedfunc
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Installation
+
+    ### Homebrew
+    ```bash
+    brew install 715d/unusedfunc/unusedfunc
+    ```
+
+    ### Go Install
+    ```bash
+    go install github.com/715d/unusedfunc/cmd/unusedfunc@{{ .Tag }}
+    ```
+
+    ### Download Binary
+    Download the appropriate binary for your platform from the assets below.
+
+homebrew_casks:
+  - repository:
+      owner: 715d
+      name: unusedfunc
+      branch: main
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: https://github.com/715d/unusedfunc
+    description: "Find unused functions in Go code with high precision"
+    license: "BSD-3-Clause"
+    binaries:
+      - unusedfunc
+
+snapshot:
+  version_template: "{{ .Version }}-next"

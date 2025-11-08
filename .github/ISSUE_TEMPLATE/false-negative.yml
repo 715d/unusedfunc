@@ -1,0 +1,182 @@
+name: False Negative Report
+description: Report a function that should be flagged as unused but isn't
+title: "[False Negative]: "
+labels: ["false-negative", "bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping us improve unusedfunc! Please provide details about the function that should have been reported as unused but wasn't.
+
+  - type: textarea
+    id: function-info
+    attributes:
+      label: Function Information
+      description: Details about the function that should be reported as unused
+      placeholder: |
+        Function name: helperFunc
+        Package: github.com/example/pkg
+        File: pkg/utils.go:42
+        Exported: No
+        In /internal: No
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-unused
+    attributes:
+      label: Why should this function be reported as unused?
+      description: Explain why you believe this function is unused
+      placeholder: |
+        This function is not called anywhere in the codebase. I've searched with grep and found no references except the definition itself.
+
+        It was added 2 years ago but the code that used it was removed in commit abc123.
+    validations:
+      required: true
+
+  - type: textarea
+    id: search-verification
+    attributes:
+      label: Search Verification
+      description: Show the results of searching for the function name
+      placeholder: |
+        $ rg "helperFunc" --type go
+        pkg/utils.go:42:func helperFunc() string {
+
+        No other results found - only the definition appears.
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: function-type
+    attributes:
+      label: Function Type
+      description: What type of function is this?
+      options:
+        - Unexported function
+        - Unexported method
+        - Exported function in /internal package
+        - Exported method in /internal package
+        - Exported function (NOT in /internal)
+        - Exported method (NOT in /internal)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: Should this function be reported as unused according to unusedfunc rules?
+      options:
+        - "Yes - unexported and unused"
+        - "Yes - exported in /internal and unused"
+        - "No - exported outside /internal (by design)"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: minimal-example
+    attributes:
+      label: Minimal Reproducible Example
+      description: Provide a minimal code example that demonstrates the issue
+      placeholder: |
+        ```go
+        // pkg/utils.go
+        package utils
+
+        // This function is never called but not reported as unused
+        func helperFunc() string {
+            return "unused"
+        }
+
+        // main.go
+        package main
+
+        import "example.com/pkg/utils"
+
+        func main() {
+            // Not calling utils.helperFunc()
+        }
+        ```
+      render: go
+    validations:
+      required: true
+
+  - type: textarea
+    id: unusedfunc-output
+    attributes:
+      label: unusedfunc Output
+      description: Copy the output from unusedfunc (or note if there was no output)
+      placeholder: |
+        $ unusedfunc ./...
+        (no output - function was not reported)
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: unusedfunc Version
+      description: What version of unusedfunc are you using?
+      placeholder: "v1.1.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: cli-flags
+    attributes:
+      label: CLI Flags Used
+      description: What flags did you pass to unusedfunc?
+      placeholder: |
+        unusedfunc -v ./...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: possible-reasons
+    attributes:
+      label: Possible Reasons (check all that might apply)
+      options:
+        - label: "Function is in a file with build tags that weren't included"
+        - label: "Function might be used via an interface I'm not aware of"
+        - label: "Function could be called from assembly code"
+        - label: "Function has runtime directives (//go:linkname, //export, etc.)"
+        - label: "Function is referenced by a suppression comment"
+        - label: "Function is part of an init() chain"
+        - label: "None of the above - seems like a genuine bug"
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: How does this affect your workflow?
+      options:
+        - "Low - just noticed it while browsing"
+        - "Medium - manually reviewing for dead code"
+        - "High - relied on tool to identify all unused code"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context that might help us understand the issue
+      placeholder: |
+        - This happens with all methods on type X
+        - Only affects code in package Y
+        - Related to issue #123
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+
+        **Note**: By design, unusedfunc does NOT report exported functions in regular (non-/internal) packages as unused, even if they're not called within your codebase. This is because they may be part of a public API used by external code.
+
+        If your report is about an exported function outside `/internal`, this is expected behavior, not a bug.

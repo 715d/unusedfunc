@@ -1,0 +1,24 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/interface-dispatch-complex.*SliceContainer.Clear"
+        reason: "method not called through interface"
+      - func: "github.com/715d/unusedfunc/testdata/interface-dispatch-complex.*Rectangle.Scale"
+        reason: "method not called through interface"
+      - func: "github.com/715d/unusedfunc/testdata/interface-dispatch-complex.ProcessAndWrite"
+        reason: "function never called"
+      - func: "github.com/715d/unusedfunc/testdata/interface-dispatch-complex.*Circle.GetDiameter"
+        reason: "method not called through interface"
+      - func: "github.com/715d/unusedfunc/testdata/interface-dispatch-complex.*FileProcessor.GetFilename"
+        reason: "method not called through interface"
+      - func: "github.com/715d/unusedfunc/testdata/interface-dispatch-complex.*SliceContainer.Remove"
+        reason: "method not called through interface"
+      - func: "github.com/715d/unusedfunc/testdata/interface-dispatch-complex.*Circle.SetColor"
+        reason: "method not called - Circle doesn't implement DrawableShape"
+      - func: "github.com/715d/unusedfunc/testdata/interface-dispatch-complex.*DataProcessor.IncrementErrors"
+        reason: "method not part of Processor interface and never called directly"
+      - func: "github.com/715d/unusedfunc/testdata/interface-dispatch-complex.*DataProcessor.GetProcessedCount"
+        reason: "method not part of Processor interface and never called directly"
+    expected_errors: []

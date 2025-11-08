@@ -1,0 +1,21 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/marker-method-pattern.ValidationError.getField"
+        reason: "method not called - truly unused"
+      - func: "github.com/715d/unusedfunc/testdata/marker-method-pattern.PermissionError.getUser"
+        reason: "method not called - truly unused"
+      - func: "github.com/715d/unusedfunc/testdata/marker-method-pattern.unusedHelper"
+        reason: "function never called"
+    expected_errors: []
+    # NOTE: The marker() methods should NOT be reported as unused:
+    # - NotFoundError.marker
+    # - ValidationError.marker
+    # - PermissionError.marker
+    #
+    # These methods are never called directly, but they are essential for
+    # implementing the AppError interface. They enable type discrimination
+    # via errors.As(), which uses reflection to check interface satisfaction.
+    # Removing them would break interface contracts.

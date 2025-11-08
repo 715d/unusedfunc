@@ -1,0 +1,37 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      # DefaultPool is never used
+      - func: "example.com/project/internal/pool.*DefaultPool.Close"
+        reason: "exported function in internal package not used"
+      - func: "example.com/project/internal/pool.*DefaultPool.Get"
+        reason: "exported function in internal package not used"
+      - func: "example.com/project/internal/pool.*DefaultPool.IdleLen"
+        reason: "exported function in internal package not used"
+      - func: "example.com/project/internal/pool.*DefaultPool.Len"
+        reason: "exported function in internal package not used"
+      - func: "example.com/project/internal/pool.*DefaultPool.Put"
+        reason: "exported function in internal package not used"
+      - func: "example.com/project/internal/pool.*DefaultPool.Remove"
+        reason: "exported function in internal package not used"
+      - func: "example.com/project/internal/pool.NewDefaultPool"
+        reason: "exported function in internal package not used"
+      # WrapperPool is never used
+      - func: "example.com/project/internal/pool.*WrapperPool.Close"
+        reason: "exported function in internal package not used"
+      - func: "example.com/project/internal/pool.*WrapperPool.Get"
+        reason: "exported function in internal package not used"
+      - func: "example.com/project/internal/pool.*WrapperPool.IdleLen"
+        reason: "exported function in internal package not used"
+      - func: "example.com/project/internal/pool.*WrapperPool.Len"
+        reason: "exported function in internal package not used"
+      - func: "example.com/project/internal/pool.*WrapperPool.Put"
+        reason: "exported function in internal package not used"
+      - func: "example.com/project/internal/pool.*WrapperPool.Remove"
+        reason: "exported function in internal package not used"
+      - func: "example.com/project/internal/pool.NewWrapperPool"
+        reason: "exported function in internal package not used"
+      # SingleConnPool and StickyConnPool should NOT be here - they implement Pooler and are used
+    expected_errors: []

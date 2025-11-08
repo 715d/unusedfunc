@@ -1,0 +1,8 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    # With the fix applied, no functions should be reported as unused
+    # because they are all called or required by interfaces
+    expected_unused: []
+    expected_errors: []

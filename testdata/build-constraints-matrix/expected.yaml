@@ -1,0 +1,162 @@
+# Matrix of build configurations to test
+build_configurations:
+  # Debug build configuration (platform-independent)
+  - name: "debug"
+    build_tags: ["debug"]
+    enable_cgo: false
+    goos: "darwin"
+    goarch: "arm64"
+    expected_unused:
+      # Functions that are unused in all configurations
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedCommon"
+        reason: "not used on any platform"
+        file: "common.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedMain"
+        reason: "not used in main"
+        file: "main.go"
+      # Functions only available under specific constraints but not used
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.ComplexOptimization"
+        reason: "not used in benchmarks"
+        file: "complex_constraints.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.DebugDump"
+        reason: "available but not used in debug builds"
+        file: "debug.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedComplex"
+        reason: "not used on complex platforms"
+        file: "complex_constraints.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedDebug"
+        reason: "not used even in debug mode"
+        file: "debug.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedUnix"
+        reason: "not used on Unix"
+        file: "unix.go"
+
+  # Test build configuration (main.go excluded due to !test constraint, platform-independent)
+  - name: "test"
+    build_tags: ["test"]
+    enable_cgo: false
+    goos: "darwin"
+    goarch: "arm64"
+    expected_unused:
+      # Functions that are unused in all configurations
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedCommon"
+        reason: "not used on any platform"
+        file: "common.go"
+      # With main.go excluded, many functions become unused
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.CommonFunc"
+        reason: "main.go excluded by !test constraint"
+        file: "common.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.CommonHelper"
+        reason: "main.go excluded by !test constraint"
+        file: "common.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.ComplexOptimization"
+        reason: "not used without main"
+        file: "complex_constraints.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.ComplexPlatformInit"
+        reason: "not used without main"
+        file: "complex_constraints.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedComplex"
+        reason: "not used on complex platforms"
+        file: "complex_constraints.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.setupComplexFeatures"
+        reason: "not used without main"
+        file: "complex_constraints.go"
+      # Platform-specific optimizations unused without main (file varies by platform)
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.LinuxAMD64Optimize"
+        reason: "not used without main"
+      # Release functions unused without main
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.ReleaseInit"
+        reason: "not used without main"
+        file: "release.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.ReleaseCheck"
+        reason: "not used without main"
+        file: "release.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.optimizePerformance"
+        reason: "not used without main"
+        file: "release.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedRelease"
+        reason: "not used in release mode"
+        file: "release.go"
+      # Unix functions unused without main
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnixInit"
+        reason: "not used without main"
+        file: "unix.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.unixSetup"
+        reason: "not used without main"
+        file: "unix.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.setupUnixPaths"
+        reason: "not used without main"
+        file: "unix.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.configureUnixSignals"
+        reason: "not used without main"
+        file: "unix.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedUnix"
+        reason: "not used on Unix"
+        file: "unix.go"
+      # Stub functions (from stubs) unused without main
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.WindowsInit"
+        reason: "stub function not used"
+        file: "stubs_nowindows.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.DebugInit"
+        reason: "stub function not used"
+        file: "stubs_nodebug.go"
+      # Test functions that are still unused even with test tag
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedTestHelper"
+        reason: "not used even in tests"
+        file: "test_only.go"
+
+  # Linux AMD64 specific configuration
+  - name: "linux-amd64"
+    build_tags: []
+    enable_cgo: false
+    goos: "linux"
+    goarch: "amd64"
+    expected_unused:
+      # Functions that are unused in all configurations
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedCommon"
+        reason: "not used on any platform"
+        file: "common.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedMain"
+        reason: "not used in main"
+        file: "main.go"
+      # Platform-specific unused functions
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.ComplexOptimization"
+        reason: "not used in benchmarks"
+        file: "complex_constraints.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedComplex"
+        reason: "not used on complex platforms"
+        file: "complex_constraints.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.LinuxAMD64Special"
+        reason: "not used even on Linux AMD64"
+        file: "linux_amd64.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedLinuxAMD64"
+        reason: "not used on Linux AMD64"
+        file: "linux_amd64.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedRelease"
+        reason: "not used in release mode"
+        file: "release.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedUnix"
+        reason: "not used on Unix"
+        file: "unix.go"
+
+  # Windows specific configuration
+  - name: "windows-amd64"
+    build_tags: []
+    enable_cgo: false
+    goos: "windows"
+    goarch: "amd64"
+    expected_unused:
+      # Functions that are unused in all configurations
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedCommon"
+        reason: "not used on any platform"
+        file: "common.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedMain"
+        reason: "not used in main"
+        file: "main.go"
+      # Platform-specific unused functions
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedRelease"
+        reason: "not used in release mode"
+        file: "release.go"
+      - func: "github.com/715d/unusedfunc/testdata/build-constraints-matrix.UnusedWindows"
+        reason: "not used on Windows"
+        file: "windows.go"

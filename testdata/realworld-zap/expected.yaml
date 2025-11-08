@@ -1,0 +1,10 @@
+repository:
+  url: "https://github.com/uber-go/zap"
+  ref: "v1.27.0"
+  subdir: ""
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused: []
+    expected_errors: []

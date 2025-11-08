@@ -1,0 +1,42 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      # API package
+      - func: "crosspackage/pkg/api.*Handler.handleInternal"
+        reason: "unexported, not used"
+        file: "pkg/api/handler.go"
+      - func: "crosspackage/pkg/api.unusedHelper"
+        reason: "not used anywhere"
+        file: "pkg/api/handler.go"
+      - func: "crosspackage/pkg/api.formatError"
+        reason: "not used anywhere"
+        file: "pkg/api/handler.go"
+      
+      # Service package
+      - func: "crosspackage/pkg/service.*Service.internalMethod"
+        reason: "unexported, not used"
+        file: "pkg/service/service.go"
+      
+      # Utils package
+
+      # Internal/core package (exported in internal should be reported)
+      - func: "crosspackage/internal/core.*Processor.Configure"
+        reason: "exported in internal package, not used"
+        file: "internal/core/processor.go"
+      - func: "crosspackage/internal/core.*Processor.GetConfig"
+        reason: "exported in internal package, not used"
+        file: "internal/core/processor.go"
+      - func: "crosspackage/internal/core.*Processor.validate"
+        reason: "unexported, not used"
+        file: "internal/core/processor.go"
+      - func: "crosspackage/internal/core.*Processor.TestOnlyMethod"
+        reason: "exported in internal package, not used"
+        file: "internal/core/processor.go"
+      
+      # Main package
+      - func: "crosspackage/cmd/app.unusedMain"
+        reason: "not used anywhere"
+        file: "cmd/app/main.go"
+    expected_errors: []

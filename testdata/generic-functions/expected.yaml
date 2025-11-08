@@ -1,0 +1,12 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      - func: "test.*Container[T].Size"
+        reason: "generic method not used"
+      - func: "test.*Container[T].Clear"
+        reason: "generic method not used"
+      - func: "test.*StringProcessor.Validate"
+        reason: "method not used"
+    expected_errors: []

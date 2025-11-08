@@ -1,0 +1,6 @@
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused: []  # All functions should be detected as used
+    expected_errors: []

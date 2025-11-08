@@ -1,0 +1,10 @@
+repository:
+  url: "https://github.com/stretchr/testify"
+  ref: "v1.8.4"
+  subdir: ""
+build_configurations:
+  - name: "default"
+    build_tags: []
+    enable_cgo: false
+    expected_unused: []
+    expected_errors: []
