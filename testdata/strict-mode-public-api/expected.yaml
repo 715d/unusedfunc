@@ -1,0 +1,9 @@
+build_configurations:
+  - name: "normal-mode"
+    build_tags: []
+    enable_cgo: false
+    expected_unused:
+      # Normal mode: only unexported functions are reported
+      - func: "github.com/715d/unusedfunc/testdata/strict-mode-public-api/publicapi.unusedPrivateFunction"
+        reason: "unexported function not used"
+    expected_errors: []

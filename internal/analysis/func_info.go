@@ -51,15 +51,19 @@ type FuncInfo struct {
 
 	// Package is the package containing this function.
 	Package *packages.Package
+
+	// Strict indicates strict mode where ALL exported functions are checked for usage.
+	Strict bool
 }
 
 // NewFuncInfo creates a new FuncInfo for the given function object and package.
-func NewFuncInfo(obj types.Object, pkg *packages.Package, nameCache *NameCache) *FuncInfo {
+func NewFuncInfo(obj types.Object, pkg *packages.Package, nameCache *NameCache, strict bool) *FuncInfo {
 	if obj == nil {
 		return &FuncInfo{
 			Object:  nil,
 			Name:    "",
 			Package: pkg,
+			Strict:  strict,
 		}
 	}
 
@@ -70,6 +74,7 @@ func NewFuncInfo(obj types.Object, pkg *packages.Package, nameCache *NameCache) 
 		IsExported:     obj.Exported(),
 		Package:        pkg,
 		DeclarationPos: obj.Pos(),
+		Strict:         strict,
 	}
 
 	fi.IsInInternal = fi.IsInInternalPackage()
@@ -135,7 +140,13 @@ func (fi *FuncInfo) ShouldReport() bool {
 		return true
 	}
 
-	// Report exported unused functions if:
+	// In strict mode, report ALL unused exported functions. This is intended for applications
+	// where no functions are considered part of a public API.
+	if fi.Strict {
+		return true
+	}
+
+	// Normal mode: Report exported unused functions if:
 	// 1. They're in internal packages, OR
 	// 2. They're in a main package (not externally accessible)
 	if fi.IsInInternal {

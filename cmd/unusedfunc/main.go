@@ -31,6 +31,7 @@ type Config struct {
 	BuildTags     []string // build tags to use during package loading
 	Profile       bool     // enables CPU and memory profiling
 	SkipGenerated bool     // skip files with generated code markers
+	Strict        bool     // report ALL unused exported functions (not just /internal)
 }
 
 const (
@@ -55,11 +56,13 @@ func main() {
 
 It reports:
 - Unexported functions that are not used anywhere
-- Exported functions that are unused within /internal packages`,
+- Exported functions that are unused within /internal packages
+- With --strict: ALL unused exported functions (use when packages aren't imported externally)`,
 		Example: `  unusedfunc ./...                    # Analyze all packages
   unusedfunc pkg1 pkg2               # Analyze specific packages
   unusedfunc -v ./internal           # Verbose output
-  unusedfunc -json . > report.json   # JSON output to file`,
+  unusedfunc -json . > report.json   # JSON output to file
+  unusedfunc --strict ./...          # Report ALL unused exports`,
 		Args:               cobra.ArbitraryArgs,
 		RunE:               runCommand,
 		PersistentPreRunE:  setup,
@@ -78,6 +81,7 @@ It reports:
 	rootCmd.PersistentFlags().StringSliceVar(&cfg.BuildTags, "build-tags", []string{}, "Build tags to use during package loading")
 	rootCmd.PersistentFlags().BoolVar(&cfg.Profile, "profile", false, "Enable CPU and memory profiling (writes cpu.prof and mem.prof to current directory)")
 	rootCmd.PersistentFlags().BoolVar(&cfg.SkipGenerated, "skip-generated", true, "Skip files with generated code markers (e.g., '// Code generated')")
+	rootCmd.PersistentFlags().BoolVar(&cfg.Strict, "strict", false, "Report ALL unused exported functions (not just those in /internal)")
 
 	if err := rootCmd.Execute(); err != nil {
 		_ = teardown(nil, nil)
@@ -148,6 +152,7 @@ func runAnalysis(ctx context.Context, cfg *Config) (*Result, error) {
 	slog.Info("running analysis")
 	analyzer := unusedfunc.NewAnalyzer(unusedfunc.AnalyzerOptions{
 		SkipGenerated: cfg.SkipGenerated,
+		Strict:        cfg.Strict,
 	})
 	result, err := analyzer.Analyze(pkgs)
 	if err != nil {
@@ -196,9 +201,16 @@ func convertToResult(funcs map[types.Object]*analysis.FuncInfo, dur time.Duratio
 				}
 			}
 
-			reason := "unexported and unused"
-			if f.IsExported && f.IsInInternalPackage() {
+			var reason string
+			switch {
+			case !f.IsExported:
+				reason = "unexported and unused"
+			case f.IsInInternalPackage():
 				reason = "exported in internal and unused"
+			case f.Package != nil && f.Package.Name == "main":
+				reason = "exported in main and unused"
+			case f.Strict:
+				reason = "exported and unused (strict mode)"
 			}
 
 			packagePath := ""

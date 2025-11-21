@@ -25,6 +25,7 @@ import (
 // AnalyzerOptions holds configuration options for the analyzer.
 type AnalyzerOptions struct {
 	SkipGenerated bool // Skip files with generated code markers.
+	Strict        bool // Report ALL unused exported functions (not just /internal).
 }
 
 // Analyzer orchestrates the method analysis process using SSA.
@@ -59,7 +60,7 @@ func (a *Analyzer) Analyze(pkgs []*packages.Package) (map[types.Object]*analysis
 	assemblyInfo := a.scanAssemblyFiles(pkgs)
 
 	// Step 3: Create SSA analyzer and analyze all functions.
-	ssaAnalyzer, err := ssa.NewAnalyzer(pkgs)
+	ssaAnalyzer, err := ssa.NewAnalyzer(pkgs, a.opts.Strict)
 	if err != nil {
 		return nil, fmt.Errorf("create SSA analyzer: %w", err)
 	}
@@ -120,7 +121,7 @@ func (a *Analyzer) collectFunctions(pkgs []*packages.Package, assemblyInfo map[s
 					if fn.Name() == "" {
 						continue
 					}
-					funcInfo := analysis.NewFuncInfo(fn, pkg, a.nameCache)
+					funcInfo := analysis.NewFuncInfo(fn, pkg, a.nameCache, a.opts.Strict)
 					a.detectRuntimeDirectives(funcInfo, declMap)
 					// Check if this function has assembly implementation or is called from assembly.
 					if assemblyInfo[pkg.PkgPath] != nil {
@@ -137,7 +138,7 @@ func (a *Analyzer) collectFunctions(pkgs []*packages.Package, assemblyInfo map[s
 
 						for i := range named.NumMethods() {
 							method := named.Method(i)
-							funcInfo := analysis.NewFuncInfo(method, pkg, a.nameCache)
+							funcInfo := analysis.NewFuncInfo(method, pkg, a.nameCache, a.opts.Strict)
 							a.detectRuntimeDirectives(funcInfo, declMap)
 							// Check if this method has assembly implementation or is called from assembly.
 							if assemblyInfo[pkg.PkgPath] != nil {

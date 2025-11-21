@@ -70,7 +70,7 @@ func TestSSAAnalyzer_NewSSAAnalyzer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pkgs := tt.setupPkgs()
-			analyzer, err := NewAnalyzer(pkgs)
+			analyzer, err := NewAnalyzer(pkgs, false)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -113,7 +113,7 @@ func TestSSAAnalyzer_BuildSSAProgram(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pkgs := tt.setupPkgs()
-			analyzer, err := NewAnalyzer(pkgs)
+			analyzer, err := NewAnalyzer(pkgs, false)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -342,7 +342,7 @@ func main() {
 			pkg.Types, err = conf.Check("test", fset, []*ast.File{file}, info)
 			require.NoError(t, err)
 
-			analyzer, err := NewAnalyzer([]*packages.Package{pkg})
+			analyzer, err := NewAnalyzer([]*packages.Package{pkg}, false)
 			require.NoError(t, err)
 
 			// Build a map of all methods.
@@ -358,7 +358,7 @@ func main() {
 							continue
 						}
 					}
-					methods[fn] = analysis.NewFuncInfo(fn, pkg, analyzer.nameCache)
+					methods[fn] = analysis.NewFuncInfo(fn, pkg, analyzer.nameCache, false)
 				}
 			}
 
@@ -547,7 +547,7 @@ func main() {
 			pkg.Types, err = conf.Check("test", fset, []*ast.File{file}, info)
 			require.NoError(t, err)
 
-			analyzer, err := NewAnalyzer([]*packages.Package{pkg})
+			analyzer, err := NewAnalyzer([]*packages.Package{pkg}, false)
 			require.NoError(t, err)
 
 			// Build methods map.
@@ -563,7 +563,7 @@ func main() {
 							continue
 						}
 					}
-					methods[fn] = analysis.NewFuncInfo(fn, pkg, analyzer.nameCache)
+					methods[fn] = analysis.NewFuncInfo(fn, pkg, analyzer.nameCache, false)
 				}
 			}
 
@@ -744,7 +744,7 @@ func main() {
 			pkg.Types, err = conf.Check("test", fset, []*ast.File{file}, info)
 			require.NoError(t, err)
 
-			analyzer, err := NewAnalyzer([]*packages.Package{pkg})
+			analyzer, err := NewAnalyzer([]*packages.Package{pkg}, false)
 			require.NoError(t, err)
 
 			// Build methods map.
@@ -760,7 +760,7 @@ func main() {
 							continue
 						}
 					}
-					methods[fn] = analysis.NewFuncInfo(fn, pkg, analyzer.nameCache)
+					methods[fn] = analysis.NewFuncInfo(fn, pkg, analyzer.nameCache, false)
 				}
 			}
 
@@ -975,7 +975,7 @@ func main() {
 			pkg.Types, err = conf.Check("test", fset, []*ast.File{file}, info)
 			require.NoError(t, err)
 
-			analyzer, err := NewAnalyzer([]*packages.Package{pkg})
+			analyzer, err := NewAnalyzer([]*packages.Package{pkg}, false)
 			require.NoError(t, err)
 
 			// Build methods map.
@@ -991,7 +991,7 @@ func main() {
 							continue
 						}
 					}
-					methods[fn] = analysis.NewFuncInfo(fn, pkg, analyzer.nameCache)
+					methods[fn] = analysis.NewFuncInfo(fn, pkg, analyzer.nameCache, false)
 				}
 			}
 
@@ -1139,7 +1139,7 @@ func main() {}
 			pkg.Types, err = conf.Check("test", fset, []*ast.File{file}, info)
 			require.NoError(t, err)
 
-			analyzer, err := NewAnalyzer([]*packages.Package{pkg})
+			analyzer, err := NewAnalyzer([]*packages.Package{pkg}, false)
 			require.NoError(t, err)
 
 			// Build methods map.
@@ -1155,7 +1155,7 @@ func main() {}
 							continue
 						}
 					}
-					methods[fn] = analysis.NewFuncInfo(fn, pkg, analyzer.nameCache)
+					methods[fn] = analysis.NewFuncInfo(fn, pkg, analyzer.nameCache, false)
 				}
 			}
 

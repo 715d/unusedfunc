@@ -76,7 +76,7 @@ func TestFuncInfo_NewFuncInfo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			pkg, obj := tt.setupPackage()
 			nameCache := NewNameCache()
-			f := NewFuncInfo(obj, pkg, nameCache)
+			f := NewFuncInfo(obj, pkg, nameCache, false)
 
 			require.NotNil(t, f, "NewFuncInfo returned nil")
 
@@ -120,7 +120,7 @@ func TestFuncInfo_IsInInternalPackage(t *testing.T) {
 				PkgPath: tt.pkgPath,
 			}
 			obj := types.NewFunc(token.NoPos, pkg.Types, "TestFunc", nil)
-			f := NewFuncInfo(obj, pkg, NewNameCache())
+			f := NewFuncInfo(obj, pkg, NewNameCache(), false)
 
 			result := f.IsInInternalPackage()
 			require.Equal(t, tt.expected, result, "Expected IsInInternalPackage() to return %v for package %s", tt.expected, tt.pkgPath)
@@ -225,7 +225,7 @@ func TestFuncInfo_ShouldReport(t *testing.T) {
 			}
 
 			obj := types.NewFunc(token.NoPos, pkg.Types, funcName, nil)
-			f := NewFuncInfo(obj, pkg, NewNameCache())
+			f := NewFuncInfo(obj, pkg, NewNameCache(), false)
 			f.IsUsed = tt.isUsed
 
 			result := f.ShouldReport()

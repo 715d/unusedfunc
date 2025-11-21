@@ -4,7 +4,6 @@ package runtime
 
 import (
 	"go/ast"
-	"go/types"
 	"strings"
 )
 
@@ -94,10 +93,9 @@ func parseDirective(comment string) *DirectiveInfo {
 
 	// Check for each known runtime directive.
 	for directive, directiveType := range runtimeDirectives {
-		if strings.HasPrefix(text, directive) {
-			// Additional validation: ensure it's exactly the directive or followed by space/args.
-			remainder := strings.TrimPrefix(text, directive)
-			if remainder == "" || strings.HasPrefix(remainder, " ") {
+		if after, ok := strings.CutPrefix(text, directive); ok {
+			// Ensure it's exactly the directive or followed by space/args.
+			if after == "" || strings.HasPrefix(after, " ") {
 				return &DirectiveInfo{
 					Type:      directiveType,
 					Directive: directive,
@@ -113,20 +111,4 @@ func parseDirective(comment string) *DirectiveInfo {
 // IsRuntimeHookFunction checks if a function name is a known runtime hook.
 func IsRuntimeHookFunction(name string) bool {
 	return runtimeHookFunctions[name]
-}
-
-// ShouldBeRuntimeRoot determines if a function should be considered a root.
-// for reachability analysis due to runtime characteristics
-func ShouldBeRuntimeRoot(fn *ast.FuncDecl, obj types.Object) bool {
-	// Check for runtime directives.
-	if directive := HasRuntimeDirective(fn); directive.Valid {
-		return true
-	}
-
-	// Check if it's a known runtime hook function.
-	if IsRuntimeHookFunction(obj.Name()) {
-		return true
-	}
-
-	return false
 }

@@ -7,6 +7,7 @@
 A Go linter that identifies unused functions and methods with precise rules:
 - **Unexported functions/methods**: Report if not used anywhere
 - **Exported functions/methods**: Report if unused AND within `/internal` packages
+- **Strict mode**: Report ALL unused exported functions (use when packages aren't imported externally)
 
 ## Quick Start
 
@@ -73,6 +74,9 @@ unusedfunc -v ./...
 # JSON output (verbose adds 'stats' field to JSON structure)
 unusedfunc -json -v ./...
 
+# Strict mode: report ALL unused exported functions (not just /internal)
+unusedfunc --strict ./...
+
 # Include generated files in analysis
 unusedfunc --skip-generated=false ./...
 ```
@@ -83,17 +87,29 @@ unusedfunc --skip-generated=false ./...
 
 If you see reports for exported functions, check if they're in an `/internal` package. Go's `/internal` convention means these functions are **not** public API — they're only accessible within your module. If they're unused internally, they should be removed or made unexported.
 
-**Not in `/internal`?** Exported functions in public packages are never reported, as they may be used by external code.
+**Not in `/internal`?** Exported functions in public packages are never reported in normal mode, as they may be used by external code. Use `--strict` mode if you're certain your packages aren't imported externally.
+
+### When should I use `--strict` mode?
+
+Use `--strict` mode when:
+- You're working on an **application** (not a library) where packages aren't imported externally
+- You want to find unused exported functions across your entire codebase
+- You're certain no external code imports your public packages
+
+**Example scenario:** You have a web application where all packages are internal to the project. In strict mode, `unusedfunc` will report ALL unused exported functions, helping you clean up dead code that normal mode would skip.
+
+**Warning:** Don't use `--strict` on libraries or modules that external code might import. It will report all unused exports as false positives.
 
 ### How does this compare to staticcheck's U1000?
 
-| Feature | unusedfunc | staticcheck U1000 |
-|---------|------------|-------------------|
-| **Architecture** | SSA-based analysis with RTA algorithm | AST-based analysis |
-| **Exported Functions** | **Reports unused exports in `/internal` packages** | Never reports unused exports |
-| **Performance** | Whole-program analysis (scales with codebase) | File-level analysis (consistent overhead) |
-| **Philosophy** | Opinionated: enforces `/internal` package conventions | Conservative: avoids false positives |
-| **Suppression** | `//nolint:unusedfunc` or `//lint:ignore unusedfunc` | `//lint:ignore U1000 <reason>` |
+| Feature | unusedfunc | unusedfunc --strict | staticcheck U1000 |
+|---------|------------|---------------------|-------------------|
+| **Architecture** | SSA-based analysis with RTA algorithm | SSA-based analysis with RTA algorithm | AST-based analysis |
+| **Exported Functions** | **Reports unused exports in `/internal` packages** | **Reports ALL unused exports** | Never reports unused exports |
+| **Use Case** | Libraries + apps following `/internal` convention | Applications with no external imports | General-purpose static analysis |
+| **Performance** | Whole-program analysis (scales with codebase) | Whole-program analysis (scales with codebase) | File-level analysis (consistent overhead) |
+| **Philosophy** | Opinionated: enforces `/internal` package conventions | Aggressive: treats all exports as potentially unused | Conservative: avoids false positives |
+| **Suppression** | `//nolint:unusedfunc` or `//lint:ignore unusedfunc` | `//nolint:unusedfunc` or `//lint:ignore unusedfunc` | `//lint:ignore U1000 <reason>` |
 
 **When to use `unusedfunc`:**
 - Your codebase uses `/internal` packages to organize implementation details

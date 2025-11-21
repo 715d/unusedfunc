@@ -40,10 +40,13 @@ type Analyzer struct {
 
 	// nameCache is used for computing canonical names
 	nameCache *analysis.NameCache
+
+	// strict mode: when true, exported functions are NOT automatically entry points
+	strict bool
 }
 
 // NewAnalyzer creates a new SSA analyzer for the given packages.
-func NewAnalyzer(pkgs []*packages.Package) (*Analyzer, error) {
+func NewAnalyzer(pkgs []*packages.Package, strict bool) (*Analyzer, error) {
 	// Filter out nil packages.
 	validPkgs := make([]*packages.Package, 0, len(pkgs))
 	for _, pkg := range pkgs {
@@ -60,6 +63,7 @@ func NewAnalyzer(pkgs []*packages.Package) (*Analyzer, error) {
 	sa := &Analyzer{
 		packages:  validPkgs,
 		nameCache: analysis.NewNameCache(),
+		strict:    strict,
 	}
 
 	if err := sa.buildSSAProgram(); err != nil {
@@ -207,12 +211,20 @@ func (sa *Analyzer) findEntryPoints() {
 
 				// Add exported functions only from non-main packages.
 				// In main packages, only main() and init() are entry points.
-				// Exclude exported functions from /internal packages as they are not public API.
-				if sa.isExportedFunction(fn) && pkg.Pkg.Name() != mainPkg && !sa.isInternalPackage(pkg.Pkg.Path()) {
-					// Only add if it's a function, not a method.
-					if fn.Object() != nil {
-						if sig, ok := fn.Object().Type().(*types.Signature); ok && sig.Recv() == nil {
-							sa.entryPoints = append(sa.entryPoints, fn)
+				// In strict mode: don't add any exported functions as entry points (check if actually used).
+				// In normal mode: add non-internal exported functions as entry points (public API).
+				if sa.isExportedFunction(fn) && pkg.Pkg.Name() != mainPkg {
+					isInternal := sa.isInternalPackage(pkg.Pkg.Path())
+					// Strict mode: never add (check all for usage).
+					// Normal mode: add only non-internal (public API assumed used).
+					shouldAdd := !sa.strict && !isInternal
+
+					if shouldAdd {
+						// Only add if it's a function, not a method.
+						if fn.Object() != nil {
+							if sig, ok := fn.Object().Type().(*types.Signature); ok && sig.Recv() == nil {
+								sa.entryPoints = append(sa.entryPoints, fn)
+							}
 						}
 					}
 				}
@@ -221,7 +233,8 @@ func (sa *Analyzer) findEntryPoints() {
 
 		// Add exported methods as entry points for library packages.
 		// This ensures that unexported methods called by exported methods are not marked as unused.
-		if pkg.Pkg.Name() != mainPkg && !sa.isInternalPackage(pkg.Pkg.Path()) {
+		// In strict mode, skip this entirely (check all methods for actual usage).
+		if pkg.Pkg.Name() != mainPkg && !sa.strict && !sa.isInternalPackage(pkg.Pkg.Path()) {
 			for _, member := range pkg.Members {
 				if typ, ok := member.(*ssa.Type); ok && typ != nil {
 					// Get the underlying types.Type.
@@ -555,9 +568,12 @@ func (sa *Analyzer) isExportedFunction(fn *ssa.Function) bool {
 	return fn.Object() != nil && fn.Object().Exported()
 }
 
-// isInternalPackage checks if a package path contains /internal/
+// isInternalPackage checks if a package path is an internal package.
 func (sa *Analyzer) isInternalPackage(pkgPath string) bool {
-	return strings.Contains(pkgPath, "/internal/") || strings.HasSuffix(pkgPath, "/internal")
+	return strings.Contains(pkgPath, "/internal/") ||
+		strings.HasSuffix(pkgPath, "/internal") ||
+		strings.HasPrefix(pkgPath, "internal/") ||
+		pkgPath == "internal"
 }
 
 type Set[T comparable] map[T]struct{}

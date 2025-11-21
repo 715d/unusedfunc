@@ -4,7 +4,8 @@
 Detects unused functions and methods in Go code with high precision:
 - **Unexported functions**: Reports if unused anywhere
 - **Exported functions in `/internal`**: Reports if unused (enforces internal convention)
-- **Exported functions elsewhere**: Never reports (public API)
+- **Exported functions elsewhere**: Never reports in normal mode (public API)
+- **Strict mode (`--strict`)**: Reports ALL unused exports (use for applications, not libraries)
 
 ## 🔬 Analysis Engine
 **Modified RTA (Rapid Type Analysis)** with 8 precision enhancements:
@@ -56,6 +57,7 @@ make lint         # golangci-lint (47 linters)
 # Run
 ./build/unusedfunc ./...                    # Analyze current module
 ./build/unusedfunc --skip-generated ./...   # Skip generated files (default)
+./build/unusedfunc --strict ./...           # Report ALL unused exports (not just /internal)
 ./build/unusedfunc -v -json ./...           # Verbose JSON output
 ```
 
@@ -199,10 +201,18 @@ See **docs/reference/known-limitations.md** for complete list and workarounds.
 ### Command-Line Flags
 ```bash
 --skip-generated    # Skip generated files (default: true)
+--strict            # Report ALL unused exports (not just /internal)
 --include-tests     # Include test files in analysis
 -v, --verbose       # Show detailed progress
 -json               # JSON output format
 ```
+
+**When to use `--strict`:**
+- Application code where packages aren't imported externally
+- Want to find ALL unused exported functions, not just those in `/internal`
+- Cleaning up dead code in a self-contained project
+
+**Warning:** Don't use on libraries - it will report all unused public API as false positives.
 
 ### Suppression Comments
 ```go
