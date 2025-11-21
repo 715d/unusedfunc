@@ -3,7 +3,7 @@ cask "unusedfunc" do
   name "unusedfunc"
   desc "Find unused functions in Go code with high precision"
   homepage "https://github.com/715d/unusedfunc"
-  version "0.1.0"
+  version "0.2.0"
 
   livecheck do
     skip "Auto-generated on release."
@@ -14,22 +14,22 @@ cask "unusedfunc" do
   on_macos do
     on_intel do
       url "https://github.com/715d/unusedfunc/releases/download/v#{version}/unusedfunc-#{version}-darwin-amd64.tar.gz"
-      sha256 "fc7a71a0e3307f7fd7fe90f027c485d751403f117bae837c7ca09fb634960dbf"
+      sha256 "b0069a3b2dd36cae9ac4f1eb7e403b5672b1c2ba18521158d3d99217d9fcaf09"
     end
     on_arm do
       url "https://github.com/715d/unusedfunc/releases/download/v#{version}/unusedfunc-#{version}-darwin-arm64.tar.gz"
-      sha256 "f9e3e749586753cbd815b93f6667341e9153e3c0371982afe126263a3e10d0db"
+      sha256 "f369265659b364a4a01e73f012e79f59d28346a4f17dc80088b00160238ec5ec"
     end
   end
 
   on_linux do
     on_intel do
       url "https://github.com/715d/unusedfunc/releases/download/v#{version}/unusedfunc-#{version}-linux-amd64.tar.gz"
-      sha256 "b0ff85e012750569bd016b8ef6f45517607de2c18f8e30f8350dfb240dc4919b"
+      sha256 "1b3ed0a37acc21e093dfec04a59f61e4fa7c3a3c0e3b42b6e19624a31e9599d3"
     end
     on_arm do
       url "https://github.com/715d/unusedfunc/releases/download/v#{version}/unusedfunc-#{version}-linux-arm64.tar.gz"
-      sha256 "da6b8446d23f66cabc7952715d3ce9bbe5f78e8125ffdda5fd7d83d45e96d50d"
+      sha256 "4b935f24c8ad63bd30536d4818d692f0743ee7b6a3951555e3dba0c799c1bef1"
     end
   end
 
