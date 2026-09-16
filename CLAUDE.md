@@ -1,24 +1,16 @@
 # unusedfunc Quick Reference
 
 ## 🎯 What It Does
-Detects unused functions and methods in Go code with high precision:
+Detects unused functions and methods in Go code using reachability analysis:
 - **Unexported functions**: Reports if unused anywhere
-- **Exported functions in `/internal`**: Reports if unused (enforces internal convention)
+- **Exported functions in `/internal` or `main`**: Reports if unused
 - **Exported functions elsewhere**: Never reports in normal mode (public API)
 - **Strict mode (`--strict`)**: Reports ALL unused exports (use for applications, not libraries)
 
 ## 🔬 Analysis Engine
-**Modified RTA (Rapid Type Analysis)** with 8 precision enhancements:
-1. Pattern-based reflection (knows what `json.Marshal`, `fmt.Printf` actually call)
-2. Precise interface conversions (only marks interface-required methods)
-3. Context-aware analysis (tracks calling context)
-4. Enhanced compliance (`*Interface → any` patterns like `errors.As`)
-5. TypeAssert/ChangeInterface support
-6. SetFinalizer detection
-7. Generic template auto-tracking
-8. 50+ known safe functions mapped
+**Modified RTA (Rapid Type Analysis)** computes reachability without retaining a call graph. It handles interface conversions/assertions, direct `runtime.SetFinalizer` calls, and generic origins. Reflection handling uses function-context heuristics with a direct `reflect.ValueOf`/`TypeOf` argument exception, not general value-flow analysis.
 
-**Result**: 80% of projects (16/20) have zero false positives on 1.2M+ LOC
+Read **docs/reference/rta-algorithm.md** before changing reachability rules.
 
 ## 📁 Project Structure
 
@@ -26,11 +18,15 @@ Detects unused functions and methods in Go code with high precision:
 unusedfunc/
 ├── cmd/unusedfunc/          # CLI application
 ├── pkg/
-│   └── ssa/                 # SSA analyzer (integrates with RTA)
+│   ├── unusedfunc/          # Package loading and orchestration
+│   ├── ssa/                 # SSA analyzer (integrates with RTA)
+│   ├── assembly/            # Assembly scanning
+│   ├── runtime/             # Runtime directive detection
+│   └── suppress/            # Suppression comments
 ├── internal/
 │   ├── rta/                 # Modified RTA implementation (core algorithm)
-│   ├── funcinfo/            # Function metadata
-│   └── testharness/         # Test framework
+│   ├── analysis/            # Function metadata and reporting policy
+│   └── harness/             # Test framework
 ├── testdata/                # Comprehensive test cases
 └── docs/
     ├── architecture.md      # Design decisions, RTA modifications, patterns
@@ -39,8 +35,7 @@ unusedfunc/
     ├── context/             # Session notes (temporal)
     └── reference/
         ├── known-limitations.md   # Template calls, reflection patterns
-        ├── rta-algorithm.md       # Modified RTA details (8 enhancements)
-        └── validation-results.md  # 20 project test results
+        └── rta-algorithm.md       # Modified RTA details
 ```
 
 ## 🛠️ Build Commands
@@ -52,29 +47,27 @@ go build -o build/unusedfunc ./cmd/unusedfunc
 
 # Test
 make test         # All tests with race detector and coverage
-make lint         # golangci-lint (47 linters)
+make lint         # golangci-lint using .golangci.yaml
 
 # Run
 ./build/unusedfunc ./...                    # Analyze current module
-./build/unusedfunc --skip-generated ./...   # Skip generated files (default)
 ./build/unusedfunc --strict ./...           # Report ALL unused exports (not just /internal)
-./build/unusedfunc -v -json ./...           # Verbose JSON output
+./build/unusedfunc -v --json ./...          # JSON output and verbose stderr logs
 ```
 
 ## 📚 Key Documentation
 
 ### Start Here
 - **README.md** - User guide, comparison with staticcheck, examples
-- **docs/architecture.md** - Complete technical details, all 8 RTA modifications
+- **docs/architecture.md** - Read before changing analysis boundaries or root policy
 - **docs/workflows.md** - Development workflows, validation procedures
 
 ### Deep Dives
 - **docs/reference/rta-algorithm.md** - Modified RTA algorithm explained
 - **docs/reference/known-limitations.md** - Template calls, reflection patterns
-- **docs/reference/validation-results.md** - Real-world test results
 
 ### Quick Lookups
-- **docs/performance.md** - Optimization strategies, profiling guide
+- **docs/performance.md** - Read before profiling or optimizing analysis
 - **docs/context/** - Working notes from development sessions
 
 ## 🏗️ Architecture Overview
@@ -91,9 +84,9 @@ make lint         # golangci-lint (47 linters)
    ↓
 5. Extract Reachable Functions (from RTA result)
    ↓
-6. Apply Business Rules (unexported + exported in /internal)
+6. Mark Suppressions (//nolint:unusedfunc comments)
    ↓
-7. Check Suppressions (//nolint:unusedfunc comments)
+7. Apply Reporting Policy (unexported + exports in internal/main; all exports in strict mode)
    ↓
 8. Report Unused Functions
 ```
@@ -101,19 +94,18 @@ make lint         # golangci-lint (47 linters)
 ### Core Components
 
 **Modified RTA** (`internal/rta/rta.go`)
-- Based on golang.org/x/tools@v0.35.0 with heavy modifications
-- 8 precision enhancements (see docs/reference/rta-algorithm.md)
-- Pattern-based reflection via `knownSafeFunctions` map (50+ functions)
-- Fingerprint optimization (96.9% rejection rate)
+- Fork-specific behavior is described in docs/reference/rta-algorithm.md
+- Pattern-based reflection via `knownSafeFunctions`
+- Fingerprints reject impossible interface matches before `types.Implements`
 - Generic template auto-tracking
 
 **SSA Analyzer** (`pkg/ssa/analyzer.go`)
 - Integrates with modified RTA
 - Entry point detection (main, init, tests, exports, reflection)
 - Converts RTA results to `types.Object` set
-- Handles assembly scanning, linkname detection
+- Consumes runtime and assembly metadata collected by `pkg/unusedfunc`
 
-**Function Info** (`internal/funcinfo/`)
+**Function Info** (`internal/analysis/`)
 - Metadata per function (exported, internal, suppressed)
 - Business logic: `ShouldReport()` determines if unused
 
@@ -127,50 +119,19 @@ The analyzer considers these as entry points (always reachable):
 - `main()` functions
 - `init()` functions
 - `Test*`, `Benchmark*`, `Example*` functions
-- Exported functions in non-main packages (library API)
+- Exported functions and methods in non-main, non-internal packages, only in normal mode
 - Functions with runtime directives (`//go:nosplit`, etc.)
-- Assembly-implemented or assembly-called functions
-- Functions with `//go:linkname` directives
+- Functions called from assembly, and exported assembly implementations outside main
+- Functions with recognized declaration-attached `//go:linkname` directives
 - Functions with `//export` (CGo)
-- Reflection targets (via `isPotentialReflectionTarget`)
-- SetFinalizer callbacks (detected by RTA)
+- Exact-name package-level reflection candidates (via `isPotentialReflectionTarget`)
 
-## 📊 Performance
-
-**Targets**: <2 minutes per 100K LOC ✅ Achieved
-
-**Actual Results** (from validation-results.md):
-- Small (<20K LOC): ~1.2s average
-- Medium (20-100K LOC): ~8.4s average
-- Large (100-300K LOC): ~23.7s average
-
-**Optimizations**:
-- Method set reuse (eliminates 3.26GB allocations)
-- Interface pre-computation (11x speedup: 523s → 47s on Kubernetes)
-- Fingerprint fast-path (96.9% rejection rate)
-- Parallel package processing (4-8x speedup)
-- xsync.Map for concurrent maps (50-70% lock reduction)
-
-## ✅ Validation Results
-
-Tested on 20 popular Go projects (1.2M+ LOC total):
-
-**Perfect (16/20 - 80% success rate)**:
-- go-chi/chi, spf13/cobra, gin-gonic/gin, gorilla/mux, gorilla/websocket
-- go-playground/validator, stretchr/testify, nats-io/nats.go, labstack/echo
-- lib/pq, go-sql-driver/mysql, hashicorp/consul, etcd-io/etcd
-- prometheus/prometheus, containerd/containerd, docker/cli
-
-**Known Limitations (4/20)**:
-- golang/protobuf - reflection MethodByName (676 false positives, use `--skip-generated`)
-- grpc-go - reflection patterns (150 false positives, use `--skip-generated`)
-- go-openapi/spec - schema validation reflection (89 false positives)
-- gohugoio/hugo - template methods (43 false positives, use suppression comments)
+RTA additionally discovers direct SetFinalizer callbacks while visiting reachable calls. Suppression comments filter reporting; they do not create roots.
 
 ## 🚨 Known Limitations
 
-### 1. Template Method Calls (Industry Standard)
-Methods called from `.gotmpl`, `.tmpl`, `.html` files are flagged as unused.
+### 1. Template Method Calls
+Methods called only from `.gotmpl`, `.tmpl`, or `.html` files may be reported because template text is not analyzed.
 
 **Workaround**: Suppression comments
 ```go
@@ -181,7 +142,7 @@ func (t *Type) TemplateMethod() {}
 ### 2. reflect.MethodByName Patterns
 Methods called via `reflect.Value.MethodByName("name")` may be flagged.
 
-**Workaround**: Use `--skip-generated` (eliminates ~98% of cases)
+**Workaround**: Add a suppression documenting the dynamic use.
 
 **Why**: Requires data flow analysis to track string constants through reflection calls.
 
@@ -200,12 +161,14 @@ See **docs/reference/known-limitations.md** for complete list and workarounds.
 
 ### Command-Line Flags
 ```bash
---skip-generated    # Skip generated files (default: true)
---strict            # Report ALL unused exports (not just /internal)
---include-tests     # Include test files in analysis
--v, --verbose       # Show detailed progress
--json               # JSON output format
+--strict            # Check exports beyond internal/main packages too
+--build-tags        # Select build tags (comma-separated)
+--profile           # Write cpu.prof and mem.prof in the working directory
+-v, --verbose       # Enable diagnostic logging on stderr
+--json              # JSON output, always including statistics
 ```
+
+Tests are always loaded. `--skip-generated` defaults to true but only filters declarations used to detect runtime directives; it does not exclude generated functions from analysis or reporting. See **docs/reference/known-limitations.md** before advising on generated-code findings.
 
 **When to use `--strict`:**
 - Application code where packages aren't imported externally
@@ -215,6 +178,8 @@ See **docs/reference/known-limitations.md** for complete list and workarounds.
 **Warning:** Don't use on libraries - it will report all unused public API as false positives.
 
 ### Suppression Comments
+Place the comment immediately before the declaration or on the same line. File-wide suppression is not supported.
+
 ```go
 // Format 1: nolint style
 //nolint:unusedfunc
@@ -237,7 +202,7 @@ func example() {}
 1. Template usage? → Add suppression with template file reference
 2. Reflection usage? → Check if pattern is in `knownSafeFunctions`
 3. Assembly call? → Verify `.s` file parsing worked
-4. Test-only? → Check if test files included
+4. Test-only? → Check whether the selected patterns and build configuration include the caller
 
 See **docs/workflows.md#debugging-reachability-issues** for detailed guide.
 
@@ -245,18 +210,17 @@ See **docs/workflows.md#debugging-reachability-issues** for detailed guide.
 
 ### Key Algorithms
 
-**Modified RTA** (`internal/rta/rta.go:1-589`)
-- Read lines 7-52 for modification summary
+**Modified RTA** (`internal/rta/rta.go`)
 - Cross-product tabulation: address-taken × dynamic calls
 - Fingerprint optimization for fast `implements()` checks
-- Pattern-based reflection via `knownSafeFunctions` (lines 104-150)
+- Pattern-based reflection via `knownSafeFunctions`
 
 **Analyzer Integration** (`pkg/ssa/analyzer.go`)
 - `findEntryPoints()` - Detects all reachable roots
 - `findReachableMethods()` - Calls `rta.Analyze()` and converts results
-- `AnalyzeMethods()` - Main orchestration
+- `AnalyzeFuncs()` - Marks collected functions using reachability
 
-**Business Rules** (`internal/funcinfo/funcinfo.go`)
+**Business Rules** (`internal/analysis/func_info.go`)
 - `ShouldReport()` - Decision tree for reporting
 - `IsInInternalPackage()` - `/internal` detection
 
@@ -267,18 +231,7 @@ types.Object → FuncInfo → SSA Entry Points → RTA → Reachable Set → Fil
 
 ## 🔗 Related Tools
 
-**Why not golangci-lint?**
-- Requires whole-program SSA analysis (60-80% of time)
-- Memory intensive (500MB+ for large codebases)
-- Run as separate CI step like benchmarks
-
-**vs staticcheck U1000**
-- staticcheck: AST-based, never reports exports
-- unusedfunc: RTA-based, reports exports in `/internal`
-
-**vs deadcode**
-- deadcode: Same RTA approach, more conservative (all exports live)
-- unusedfunc: Opinionated about `/internal` convention
+`unusedfunc` is a standalone command. Run it as a separate CI step alongside other linters; its roots and reporting policy are tailored to unused exports in `/internal` and `main`.
 
 ## 📝 Contributing
 
@@ -318,15 +271,6 @@ fmt.Fprintf(os.Stderr, "warning: failed to load %s: %v\n", name, err)
 - Comments explain "why" not "what"
 - Run `make lint` before committing
 
-## 🎯 Success Metrics
-
-- ✅ Zero false positives on static code (16/20 projects = 80%)
-- ✅ Performance <2min per 100K LOC (achieved: ~24s/100K LOC average)
-- ✅ Handles interfaces correctly (100% via RTA)
-- ✅ Handles generics correctly (100% via template tracking)
-- ✅ Respects suppression comments (100%)
-- ✅ Clear limitations documented (template calls, MethodByName)
-
 ## 🚀 Quick Start
 
 ```bash
@@ -346,13 +290,12 @@ unusedfunc ./...
 unusedfunc -v ./...
 
 # JSON output for CI integration
-unusedfunc -json ./... > unused.json
+unusedfunc --json ./... > unused.json
 ```
 
 ## 📖 Further Reading
 
 - **Precision**: docs/reference/rta-algorithm.md (8 modifications explained)
-- **Validation**: docs/reference/validation-results.md (20 project results)
 - **Limitations**: docs/reference/known-limitations.md (workarounds included)
 - **Architecture**: docs/architecture.md (complete technical details)
-- **Performance**: docs/performance.md (optimization strategies)
+- **Performance**: docs/performance.md (profiling and verification)

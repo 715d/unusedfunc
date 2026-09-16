@@ -1,12 +1,12 @@
 # Nix Installation and Usage
 
-This document explains how to install and use `unusedfunc` with Nix.
+This document explains how to install and use `unusedfunc` with Nix. The local source flake builds successfully; the NUR package remains an installation option.
 
 ## Installation Methods
 
-### Via NUR (Recommended)
+### Via NUR
 
-The recommended way to install `unusedfunc` for Nix users is through [NUR](https://github.com/nix-community/NUR) (Nix User Repository).
+`unusedfunc` is available through [NUR](https://github.com/nix-community/NUR) as `nur.repos.715d.unusedfunc`. The current NUR expression packages the v0.2.0 release archive for Linux and Darwin on x86_64 and aarch64.
 
 #### NixOS Configuration
 
@@ -16,7 +16,7 @@ Add to your `configuration.nix`:
 { pkgs, ... }:
 {
   nixpkgs.config.packageOverrides = pkgs: {
-    nur = import (builtins.fetchTarball "https://github.com/nix-community/NUR/archive/master.tar.gz") {
+    nur = import (builtins.fetchTarball "https://github.com/nix-community/NUR/archive/main.tar.gz") {
       inherit pkgs;
     };
   };
@@ -27,6 +27,8 @@ Add to your `configuration.nix`:
 }
 ```
 
+For a reproducible configuration, use a pinned `fetchTarball` revision and hash instead of the moving `main` archive.
+
 #### Home Manager
 
 Add to your Home Manager configuration:
@@ -35,7 +37,7 @@ Add to your Home Manager configuration:
 { pkgs, ... }:
 {
   nixpkgs.config.packageOverrides = pkgs: {
-    nur = import (builtins.fetchTarball "https://github.com/nix-community/NUR/archive/master.tar.gz") {
+    nur = import (builtins.fetchTarball "https://github.com/nix-community/NUR/archive/main.tar.gz") {
       inherit pkgs;
     };
   };
@@ -48,7 +50,7 @@ Add to your Home Manager configuration:
 
 #### Command-Line Installation
 
-Install to your user profile:
+After configuring NUR in `~/.config/nixpkgs/config.nix` or your system configuration, install to your user profile:
 
 ```bash
 nix-env -iA nur.repos.715d.unusedfunc -f '<nixpkgs>'
@@ -56,20 +58,13 @@ nix-env -iA nur.repos.715d.unusedfunc -f '<nixpkgs>'
 
 ### Via Nix Flakes
 
-If you prefer using flakes directly:
+The repository flake exposes `packages.<system>.default`, `packages.<system>.unusedfunc`, `apps.<system>.default`, and `devShells.<system>.default` for `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, and `aarch64-darwin`.
 
-#### Quick Run (No Installation)
+#### Source-Build Status
 
-```bash
-nix run github:715d/unusedfunc -- ./...
-nix run github:715d/unusedfunc -- -v ./internal
-```
+The checked-out tree builds successfully with `nix build`. The flake pins a nixpkgs revision that provides Go 1.27 and uses that toolchain for both the package and development shell. Its `vendorHash` matches the module set from this checkout.
 
-#### Install to Profile
-
-```bash
-nix profile install github:715d/unusedfunc
-```
+This verification does not evaluate the remote `github:715d/unusedfunc` input. A remote ref can have different `go.mod`, `flake.lock`, or `vendorHash` content. Evaluate the target ref before depending on it.
 
 #### Using in Development Environment
 
@@ -96,6 +91,8 @@ Add to your `flake.nix`:
 }
 ```
 
+The remote flake source can differ from this checkout. Evaluate its target ref before using it in production.
+
 ## Building from Source
 
 ### Build Locally
@@ -108,21 +105,22 @@ cd unusedfunc
 nix build
 ```
 
-The binary will be available at `./result/bin/unusedfunc`.
+The binary is available at `./result/bin/unusedfunc`.
 
 ### Run Tests
 
 ```bash
-nix build
 nix develop
 make test
 ```
+
+The development shell provides Go 1.27, the same toolchain used by the package derivation.
 
 ## Development
 
 ### Development Shell
 
-Enter a development environment with Go and all necessary tools:
+Enter a development environment with Go:
 
 ```bash
 nix develop
@@ -130,9 +128,8 @@ nix develop
 
 This provides:
 - Go compiler and toolchain
-- All project dependencies
 
-Once in the shell, use the Makefile as normal:
+Once in the shell, use the Makefile as normal. Development tools are declared in `go.mod` and run through `go tool`; no separate tool installation is needed:
 
 ```bash
 make build    # Build the binary
@@ -142,11 +139,13 @@ make lint     # Run linters
 
 ### Build Configuration
 
-The Nix build matches the Makefile configuration:
-- **Version**: Extracted from git tags (or "dev" for untagged commits)
-- **Git Commit**: Short commit hash from the flake
+The Nix build uses these linker values:
+- **Version**: `self.rev`, or `dev` when unavailable
+- **Git Commit**: `self.shortRev`, or `unknown` when unavailable
 - **Build Time**: Fixed to `1970-01-01_00:00:00` for reproducibility
 - **ldflags**: `-w -s` for smaller binaries
+
+The Makefile declares matching metadata variables, but its `build` target does not pass `LDFLAGS` to `go build`; binaries made by `make build` retain the command's defaults (`dev`, `unknown`, and `unknown`). The flake sets `doCheck = false`, so a successful `nix build` would not run Go tests.
 
 ## Supported Systems
 
@@ -160,7 +159,7 @@ The flake supports the following systems:
 
 ### GitHub Actions
 
-Add `unusedfunc` to your CI pipeline:
+Use the published NUR flake package in a CI pipeline:
 
 ```yaml
 name: Lint
@@ -171,44 +170,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: cachix/install-nix-action@v27
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-
-      - name: Run unusedfunc
-        run: |
-          nix run github:715d/unusedfunc -- ./...
+      - uses: cachix/install-nix-action@v31
+      - run: nix profile install github:715d/nur#unusedfunc
+      - run: unusedfunc ./...
 ```
 
-### NixOS Configuration
-
-Add to your system configuration:
-
-```nix
-# configuration.nix
-{ pkgs, ... }:
-let
-  unusedfunc = pkgs.callPackage (pkgs.fetchFromGitHub {
-    owner = "715d";
-    repo = "unusedfunc";
-    rev = "main";  # or specific tag
-    sha256 = "...";
-  }) {};
-in {
-  environment.systemPackages = [ unusedfunc ];
-}
-```
+The release configuration publishes to the `715d/nur` repository. Its package currently fetches a release archive, rather than using the repository flake's source build.
 
 ## Reproducibility
 
-Nix builds are reproducible by design:
-- All dependencies are pinned in `flake.lock`
-- Build environment is isolated from system state
-- Build time is fixed for deterministic builds
-- No network access during build phase
+Nix builds isolate the build environment from system state. In this repository:
+- `flake.lock` pins flake inputs
+- `go.mod`, `go.sum`, and the package `vendorHash` determine Go dependency inputs
+- Build time is fixed for deterministic linker metadata
 
-To update dependencies:
+To update flake inputs:
 
 ```bash
 nix flake update
@@ -218,7 +194,7 @@ nix flake update
 
 ### Build Fails with "dirty Git tree" Warning
 
-This warning is harmless. It appears when uncommitted changes exist. The build will still succeed.
+This warning identifies uncommitted changes. It does not by itself indicate a build failure.
 
 ### vendorHash Mismatch
 
@@ -243,44 +219,37 @@ For permanent setup, add to your shell config (`.bashrc`, `.zshrc`, etc.).
 
 | Method | Pros | Cons |
 |--------|------|------|
-| **Nix Flakes** | Reproducible, multi-system, isolated | Requires Nix setup |
-| **go install** | Simple, fast | No version pinning |
-| **From Source** | Full control | Manual dependency management |
-| **Binary Release** | No dependencies | Platform-specific |
+| **NUR** | Packages the current published release | Requires NUR setup; release version may lag source |
+| **Nix Flakes** | Isolated, multi-system source definition | Must evaluate each remote ref before use |
+| **go install** | Simple, fast | No Nix profile integration |
+| **Binary Release** | No Go toolchain required | Platform-specific |
 
 ## Advanced Usage
 
 ### Pin a Specific Version
 
-Use a specific git tag or commit:
-
-```bash
-nix run github:715d/unusedfunc/v1.0.0 -- ./...
-nix run github:715d/unusedfunc/abc123 -- ./...
-```
-
-### Override Build Parameters
-
-Create a custom build with different settings:
-
-```nix
-unusedfunc.override {
-  buildGoModule = args: pkgs.buildGoModule (args // {
-    doCheck = true;  # Enable tests
-  });
-}
-```
+The NUR package currently references the v0.2.0 release archive. Verify each source-flake revision independently before use.
 
 ### Use in a Project Flake
 
-Add to your project's `flake.nix`:
+Add the source flake to a project's `flake.nix`:
 
 ```nix
 {
-  inputs.unusedfunc.url = "github:715d/unusedfunc";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    unusedfunc.url = "github:715d/unusedfunc";
+  };
 
-  outputs = { self, nixpkgs, unusedfunc }:
-    # Use unusedfunc.packages.${system}.default
+  outputs = { nixpkgs, unusedfunc, ... }:
+    let
+      system = "x86_64-linux"; # or your system
+      pkgs = nixpkgs.legacyPackages.${system};
+    in {
+      devShells.${system}.default = pkgs.mkShell {
+        packages = [ unusedfunc.packages.${system}.default ];
+      };
+    };
 }
 ```
 
@@ -288,9 +257,11 @@ Add to your project's `flake.nix`:
 
 To contribute Nix-related improvements:
 
-1. Test changes locally: `nix build`
-2. Verify all systems build: `nix flake check`
-3. Update documentation as needed
+1. Evaluate declared outputs: `nix flake show --no-write-lock-file`
+2. Refresh `vendorHash` after dependency changes
+3. Verify the package build, then update documentation as needed
 4. Submit PR with Nix changes
+
+The CI and release workflows read the Go version from `go.mod`. The Nix package and development shell use Go 1.27.
 
 See `flake.nix` for the complete build configuration.

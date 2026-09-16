@@ -35,6 +35,9 @@ type BuildConfiguration struct {
 	// GOARCH sets the target architecture.
 	GOARCH string `yaml:"goarch,omitempty"`
 
+	// Strict enables reporting of unused public APIs.
+	Strict bool `yaml:"strict,omitempty"`
+
 	// ExpectedUnused lists the functions expected to be reported as unused for this configuration.
 	ExpectedUnused []ExpectedFunc `yaml:"expected_unused"`
 
@@ -159,7 +162,7 @@ func (h *TestHarness) runConfiguration(t *testing.T, tc *TestCase, cfg BuildConf
 	}
 
 	// Run analysis.
-	result, err := unusedfunc.NewAnalyzer(unusedfunc.AnalyzerOptions{}).Analyze(pkgs)
+	result, err := unusedfunc.NewAnalyzer(unusedfunc.AnalyzerOptions{Strict: cfg.Strict}).Analyze(pkgs)
 	if err != nil {
 		// Check if this error was expected.
 		for _, expectedErr := range cfg.ExpectedErrors {

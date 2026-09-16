@@ -1,0 +1,7 @@
+build_configurations:
+  - name: "default"
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/json-v2-reachability.marshalDirect.Unused"
+        reason: "unrelated exported method"
+      - func: "github.com/715d/unusedfunc/testdata/json-v2-reachability.marshalDirect.unusedHelper"
+        reason: "callee of unrelated exported method"

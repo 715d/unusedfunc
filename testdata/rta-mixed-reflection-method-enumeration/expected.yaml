@@ -1,0 +1,15 @@
+build_configurations:
+  - name: "default"
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/rta-mixed-reflection-method-enumeration.T.unusedControl"
+        reason: "unused control"
+      - func: "github.com/715d/unusedfunc/testdata/rta-mixed-reflection-method-enumeration.fmtControl.UnusedExported"
+        reason: "unrelated fmt exported method"
+      - func: "github.com/715d/unusedfunc/testdata/rta-mixed-reflection-method-enumeration.fmtControl.unusedPrivateHelper"
+        reason: "unrelated fmt private helper"
+      - func: "github.com/715d/unusedfunc/testdata/rta-mixed-reflection-method-enumeration.jsonControl.UnusedExported"
+        reason: "unrelated JSON exported method"
+      - func: "github.com/715d/unusedfunc/testdata/rta-mixed-reflection-method-enumeration.jsonControl.unusedPrivateHelper"
+        reason: "unrelated JSON private helper"
+      - func: "github.com/715d/unusedfunc/testdata/rta-mixed-reflection-method-enumeration.unusedFunctionControl"
+        reason: "unused control"

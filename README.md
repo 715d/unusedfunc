@@ -6,7 +6,7 @@
 
 A Go linter that identifies unused functions and methods with precise rules:
 - **Unexported functions/methods**: Report if not used anywhere
-- **Exported functions/methods**: Report if unused AND within `/internal` packages
+- **Exported functions/methods**: Report if unused in `/internal` or `main` packages
 - **Strict mode**: Report ALL unused exported functions (use when packages aren't imported externally)
 
 ## Quick Start
@@ -18,7 +18,7 @@ unusedfunc ./...
 
 **First run?** You'll likely see reports for:
 - Unexported helper functions that are no longer called
-- Exported functions in `/internal` packages that aren't used internally
+- Exported functions in `/internal` or `main` packages that aren't reachable
 
 See [Handling False Positives](#handling-false-positives) if you encounter reflection-based code.
 
@@ -57,6 +57,8 @@ Use `unusedfunc` if:
 go install github.com/715d/unusedfunc/cmd/unusedfunc@latest
 ```
 
+Building from source requires the Go version declared in [`go.mod`](go.mod) or a toolchain that can download it automatically.
+
 **Other options:** [Binary releases](https://github.com/715d/unusedfunc/releases) | [Nix](docs/nix.md) | [From source](CONTRIBUTING.md#building)
 
 ## Usage
@@ -71,23 +73,27 @@ unusedfunc ./pkg/...
 # Verbose mode: adds statistics and debug logging to stderr
 unusedfunc -v ./...
 
-# JSON output (verbose adds 'stats' field to JSON structure)
-unusedfunc -json -v ./...
+# JSON output (always includes statistics)
+unusedfunc --json ./...
 
 # Strict mode: report ALL unused exported functions (not just /internal)
 unusedfunc --strict ./...
 
-# Include generated files in analysis
-unusedfunc --skip-generated=false ./...
+# Analyze a build-tag configuration
+unusedfunc --build-tags integration ./...
 ```
+
+Test files are always included, so test-only uses count as reachable. Run from the module you want to analyze; results cover the selected packages and build configuration, not every platform or caller outside that selection.
+
+**Exit codes:** `0` for no findings, `1` for unused functions, `2` for errors. A successful JSON report contains `unused_functions`, `stats`, `version`, and `timestamp`; verbose logging goes to stderr.
 
 ## FAQ
 
 ### Why is my exported function being reported?
 
-If you see reports for exported functions, check if they're in an `/internal` package. Go's `/internal` convention means these functions are **not** public API — they're only accessible within your module. If they're unused internally, they should be removed or made unexported.
+In normal mode, unused exports are reported in `/internal` and `main` packages. Internal packages are importable only within the tree rooted at the parent of `internal`; `main` packages are not importable as libraries. Analyze all relevant callers before removing a finding.
 
-**Not in `/internal`?** Exported functions in public packages are never reported in normal mode, as they may be used by external code. Use `--strict` mode if you're certain your packages aren't imported externally.
+**In another package?** Exported functions in non-`main`, non-`internal` packages are never reported in normal mode, as they may be used by external code. Use `--strict` mode if you're certain your packages aren't imported externally.
 
 ### When should I use `--strict` mode?
 
@@ -104,33 +110,30 @@ Use `--strict` mode when:
 
 | Feature | unusedfunc | unusedfunc --strict | staticcheck U1000 |
 |---------|------------|---------------------|-------------------|
-| **Architecture** | SSA-based analysis with RTA algorithm | SSA-based analysis with RTA algorithm | AST-based analysis |
-| **Exported Functions** | **Reports unused exports in `/internal` packages** | **Reports ALL unused exports** | Never reports unused exports |
+| **Exported Functions** | **Reports unused exports in `/internal` and `main` packages** | **Reports ALL unused exports** | Does not report unused exported package-level functions |
 | **Use Case** | Libraries + apps following `/internal` convention | Applications with no external imports | General-purpose static analysis |
-| **Performance** | Whole-program analysis (scales with codebase) | Whole-program analysis (scales with codebase) | File-level analysis (consistent overhead) |
 | **Philosophy** | Opinionated: enforces `/internal` package conventions | Aggressive: treats all exports as potentially unused | Conservative: avoids false positives |
 | **Suppression** | `//nolint:unusedfunc` or `//lint:ignore unusedfunc` | `//nolint:unusedfunc` or `//lint:ignore unusedfunc` | `//lint:ignore U1000 <reason>` |
 
 **When to use `unusedfunc`:**
 - Your codebase uses `/internal` packages to organize implementation details
 - You want to enforce that internal exports are actually used
-- You need precise call graph analysis for interface/generic code
+- You need reachability analysis for interface/generic code
 
 **When to use `staticcheck`:**
 - You want comprehensive static analysis beyond just unused functions
-- You need maximum precision across all code quality checks
 - Your codebase doesn't follow the `/internal` convention
 - You prefer a battle-tested, widely-adopted tool suite
 
 ### Why isn't this a golangci-lint plugin?
 
-`unusedfunc` requires whole-program SSA analysis to build accurate call graphs across your entire codebase. This architectural choice enables precise detection of unused exports in `/internal` packages, but requires different resource constraints than golangci-lint's file-level analyzers.
+`unusedfunc` loads the selected packages and dependencies together, builds SSA, and computes reachability across them. It is provided as a standalone command, not a golangci-lint plugin.
 
 **Run it separately:** Add `unusedfunc` as a dedicated CI step alongside golangci-lint, similar to how you'd run benchmarks or integration tests.
 
 ## Handling False Positives
 
-**Use suppression comments** for code called via reflection or templates:
+**Use suppression comments** for code called via reflection or templates. Place the comment immediately before the declaration or on the same line; file-wide suppression is not supported:
 
 ```go
 //nolint:unusedfunc
@@ -148,20 +151,20 @@ func (t *TemplateContext) Export() string {
 - Methods discovered by test frameworks
 - Protobuf-generated code
 
-**Generated code is skipped by default.** Use `--skip-generated=false` to analyze everything.
+**Generated-code limitation:** `--skip-generated` defaults to true, but currently only filters declarations used for runtime-directive detection. Generated functions still participate in analysis and can be reported; the flag is not a workaround for generated-code findings.
 
 **Full reference:** [docs/reference/known-limitations.md](docs/reference/known-limitations.md) — reflection patterns, template limitations, workarounds, and examples.
 
 ## How It Works
 
-`unusedfunc` uses SSA (Static Single Assignment) analysis to build a complete call graph of your codebase, then traces reachability from entry points (main, init, tests, exported functions).
+`unusedfunc` builds SSA (Static Single Assignment) and computes reachability with modified RTA; it does not retain a call graph. Roots include main, init, test-name prefixes, selected runtime hooks, and public exports in normal mode. Internal and main-package exports are not automatically roots.
 
-**Why SSA?** Unlike AST-based tools, SSA analysis can accurately track:
+**Why SSA?** It represents:
 - Interface method calls (which concrete type implements the interface?)
 - Generic function instantiations (which type parameters are used?)
 - Function values passed as arguments
 
-This precision is why `unusedfunc` can confidently report unused exports in `/internal` packages.
+Reflection heuristics and dynamic uses can still produce false positives or retain unused code; review findings before deleting functions.
 
 **Technical details:** [Architecture docs](docs/architecture.md) | [RTA algorithm](docs/reference/rta-algorithm.md)
 

@@ -110,6 +110,14 @@ var knownSafeFunctions = map[string][]string{
 	"(*encoding/json.Encoder).Encode": {"MarshalJSON", "MarshalText"},
 	"(*encoding/json.Decoder).Decode": {"UnmarshalJSON", "UnmarshalText"},
 
+	// JSON v2 encoding/decoding.
+	"encoding/json/v2.Marshal":         {"MarshalJSONTo", "MarshalJSON", "AppendText", "MarshalText"},
+	"encoding/json/v2.MarshalWrite":    {"MarshalJSONTo", "MarshalJSON", "AppendText", "MarshalText"},
+	"encoding/json/v2.MarshalEncode":   {"MarshalJSONTo", "MarshalJSON", "AppendText", "MarshalText"},
+	"encoding/json/v2.Unmarshal":       {"UnmarshalJSONFrom", "UnmarshalJSON", "UnmarshalText"},
+	"encoding/json/v2.UnmarshalRead":   {"UnmarshalJSONFrom", "UnmarshalJSON", "UnmarshalText"},
+	"encoding/json/v2.UnmarshalDecode": {"UnmarshalJSONFrom", "UnmarshalJSON", "UnmarshalText"},
+
 	// fmt package
 	"fmt.Printf":   {"String", "GoString", "Error", "Format"},
 	"fmt.Sprintf":  {"String", "GoString", "Error", "Format"},
@@ -271,7 +279,6 @@ func (r *rta) addReachable(f *ssa.Function, addrTaken bool) {
 	if f == nil {
 		return // Don't add nil functions to the worklist
 	}
-
 	reachable := r.result.Reachable
 	n := len(reachable)
 	v := reachable[f]
@@ -378,6 +385,14 @@ func (r *rta) addInvokeEdge(site ssa.CallInstruction, C types.Type) {
 	// Example: `type PathError = os.PathError` requires resolving to os.PathError
 	// where the methods are actually defined. Without Unalias, method lookups would fail.
 	C = types.Unalias(C)
+
+	// errors.As helpers inspect only errors supplied by the caller. The same
+	// filter must apply when either a type or an invoke site is discovered first.
+	if r.isErrorsAsHelper(site.Parent()) {
+		if _, materialized := r.result.RuntimeTypes.At(C).(bool); !materialized {
+			return
+		}
+	}
 
 	// Ascertain the concrete method of C to be called.
 	// For interface methods, the actual implementation could be on either the value or pointer.
@@ -644,6 +659,11 @@ func (r *rta) handleMakeInterface(instr *ssa.MakeInterface) {
 			}
 		}
 
+		if r.isExplicitReflectionArgument(instr) {
+			r.addRuntimeTypeForExplicitReflection(instr.X.Type())
+			return
+		}
+
 		// Empty interface conversion - check if we're in a known safe function context.
 		if r.isInKnownSafeContext() {
 			// Don't mark all exported methods - we'll handle it specially.
@@ -693,6 +713,11 @@ func (r *rta) handleTypeAssert(instr *ssa.TypeAssert) {
 	// Unalias for consistent map key lookups.
 	iface = types.Unalias(iface).(*types.Interface)
 
+	if r.isErrorsAsTypeTarget(instr.AssertedType) {
+		r.markImplementorsMethodsReachable(iface)
+		return
+	}
+
 	// Build the user types index once on first type assertion.
 	r.buildUserTypesIndex()
 
@@ -715,6 +740,35 @@ func (r *rta) handleTypeAssert(instr *ssa.TypeAssert) {
 	for _, T := range r.findAllImplementationsInProgram(iface) {
 		r.markInterfaceMethodsReachable(T, iface)
 	}
+}
+
+// isErrorsAsTypeTarget reports whether assertedType is errors.asType's target E.
+func (r *rta) isErrorsAsTypeTarget(assertedType types.Type) bool {
+	f := r.currentFunction
+	if !r.isErrorsAsHelper(f) || f.Name() != "asType" && (f.Origin() == nil || f.Origin().Name() != "asType") {
+		return false
+	}
+	typeArgs := f.TypeArgs()
+	return len(typeArgs) == 1 && types.Identical(assertedType, typeArgs[0])
+}
+
+func (r *rta) isErrorsAsHelper(f *ssa.Function) bool {
+	if f == nil {
+		return false
+	}
+
+	for _, candidate := range []*ssa.Function{f, f.Origin()} {
+		if candidate == nil || (candidate.Name() != "as" && candidate.Name() != "asType") {
+			continue
+		}
+		if candidate.Pkg != nil && candidate.Pkg.Pkg != nil && candidate.Pkg.Pkg.Path() == "errors" {
+			return true
+		}
+		if obj := candidate.Object(); obj != nil && obj.Pkg() != nil && obj.Pkg().Path() == "errors" {
+			return true
+		}
+	}
+	return false
 }
 
 // isStdlibFunction checks if a function is part of the Go standard library.
@@ -950,58 +1004,21 @@ func (r *rta) handleChangeInterface(instr *ssa.ChangeInterface) {
 // the given interface as reachable. This is needed when *Interface is converted to any,
 // as in errors.As(&customErr, err) or json.Unmarshal(data, &customObj).
 func (r *rta) markImplementorsMethodsReachable(targetIface *types.Interface) {
-	// When *Interface is converted to any (like in errors.As), we need to ensure.
-	// that all concrete types implementing that interface have their methods marked.
-	// We can't just check RuntimeTypes because the concrete types might not be there yet.
-	// Instead, we need to find all types in the program that implement the interface.
-
-	// Check all packages in the program.
 	for _, pkg := range r.prog.AllPackages() {
-		// Skip packages without proper package info.
 		if pkg == nil || pkg.Pkg == nil {
 			continue
 		}
-
-		// Check all members of the package.
 		for _, member := range pkg.Members {
-			if typeName, ok := member.(*ssa.Type); ok {
-				// Get the actual types.Type object.
-				T := typeName.Object().Type()
-
-				// Skip interfaces.
-				if _, isIface := T.Underlying().(*types.Interface); isIface {
-					continue
-				}
-
-				// Check if this type implements the target interface.
-				if types.Implements(T, targetIface) || types.Implements(types.NewPointer(T), targetIface) {
-					// IMPORTANT: Even if the type is already in RuntimeTypes (because it was.
-					// added when converted to error interface), we need to ensure ALL its
-					// exported methods are marked, not just the ones required by error.
-
-					// First check if it's already in RuntimeTypes.
-					if _, alreadyAdded := r.result.RuntimeTypes.At(T).(bool); alreadyAdded {
-						// Type is already in RuntimeTypes, but we need to ensure ALL methods.
-						// required by the interface are marked (including unexported marker methods)
-						// Only mark methods that are in the interface, not ALL methods of the type.
-						for i := range targetIface.NumMethods() {
-							ifaceMethod := targetIface.Method(i)
-							mset := r.prog.MethodSets.MethodSet(T)
-							sel := mset.Lookup(ifaceMethod.Pkg(), ifaceMethod.Name())
-							if sel != nil {
-								if fn := r.prog.MethodValue(sel); fn != nil {
-									r.addReachable(fn, true)
-								} else if sel.Obj() != nil {
-									// No SSA function (generic template method), track by Object.
-									r.addReachableObject(sel.Obj())
-								}
-							}
-						}
-					} else {
-						// Type not yet in RuntimeTypes, add it normally.
-						r.addRuntimeType(T, false)
-					}
-				}
+			typeName, ok := member.(*ssa.Type)
+			if !ok {
+				continue
+			}
+			T := typeName.Object().Type()
+			if _, isIface := T.Underlying().(*types.Interface); isIface {
+				continue
+			}
+			if types.Implements(T, targetIface) || types.Implements(types.NewPointer(T), targetIface) {
+				r.markInterfaceMethodsReachable(T, targetIface)
 			}
 		}
 	}
@@ -1028,6 +1045,42 @@ func (r *rta) isInKnownSafeContext() bool {
 		}
 	}
 	return false
+}
+
+// isExplicitReflectionArgument reports whether value is passed directly to
+// reflect.ValueOf or reflect.TypeOf.
+func (r *rta) isExplicitReflectionArgument(value ssa.Value) bool {
+	referrers := value.Referrers()
+	if referrers == nil {
+		return false
+	}
+
+	for _, referrer := range *referrers {
+		call, ok := referrer.(ssa.CallInstruction)
+		if !ok {
+			continue
+		}
+		for _, arg := range call.Common().Args {
+			if arg == value && isExplicitReflectionCall(call.Common()) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isExplicitReflectionCall(call *ssa.CallCommon) bool {
+	fn := call.StaticCallee()
+	if fn == nil || fn.Object() == nil || fn.Object().Pkg() == nil || fn.Object().Pkg().Path() != "reflect" {
+		return false
+	}
+
+	switch fn.Object().Name() {
+	case "ValueOf", "TypeOf":
+		return true
+	default:
+		return false
+	}
 }
 
 // addRuntimeTypeForInterface adds a runtime type but only marks methods required by the interface.
@@ -1066,14 +1119,12 @@ func (r *rta) addRuntimeTypeForInterface(T types.Type, iface *types.Interface, s
 			}
 		}
 
-		// Add callgraph edges for existing dynamic calls via this interface.
-		// Only do this if the type is new to RuntimeTypes.
-		if !alreadyInRuntimeTypes {
-			for _, I := range r.interfaces(T) {
-				sites, _ := r.invokeSites.At(I).([]ssa.CallInstruction)
-				for _, site := range sites {
-					r.addInvokeEdge(site, T)
-				}
+		// Structural registration may precede this interface conversion without
+		// connecting invoke sites, so replay them even for a recorded type.
+		for _, I := range r.interfaces(T) {
+			sites, _ := r.invokeSites.At(I).([]ssa.CallInstruction)
+			for _, site := range sites {
+				r.addInvokeEdge(site, T)
 			}
 		}
 	}
@@ -1119,6 +1170,29 @@ func (r *rta) addRuntimeTypeStructure(T types.Type) {
 	}
 }
 
+// addRuntimeTypeForExplicitReflection retains methods for a value passed directly
+// to reflect.ValueOf or reflect.TypeOf, even if a safe conversion recorded its type first.
+func (r *rta) addRuntimeTypeForExplicitReflection(T types.Type) {
+	r.addRuntimeType(T, false)
+	r.markExportedMethodsReachable(T)
+}
+
+func (r *rta) markExportedMethodsReachable(T types.Type) {
+	mset := r.prog.MethodSets.MethodSet(T)
+	for i := range mset.Len() {
+		sel := mset.At(i)
+		method := sel.Obj().(*types.Func)
+		if !method.Exported() || hasOwnTypeParams(method) {
+			continue
+		}
+		if fn := r.prog.MethodValue(sel); fn != nil {
+			r.addReachable(fn, true)
+		} else if sel.Obj() != nil {
+			r.addReachableObject(sel.Obj())
+		}
+	}
+}
+
 // addRuntimeTypeSelective adds a runtime type but only marks specific methods as reachable.
 func (r *rta) addRuntimeTypeSelective(T types.Type, skip bool) {
 	// Never record aliases.
@@ -1138,7 +1212,7 @@ func (r *rta) addRuntimeTypeSelective(T types.Type, skip bool) {
 			sel := mset.At(i)
 			m := sel.Obj().(*types.Func)
 
-			if m.Exported() && r.shouldMarkMethodForReflection(m) {
+			if m.Exported() && !hasOwnTypeParams(m) && r.shouldMarkMethodForReflection(m) {
 				if fn := r.prog.MethodValue(sel); fn != nil {
 					r.addReachable(fn, true)
 				} else if sel.Obj() != nil {
@@ -1273,7 +1347,7 @@ func (r *rta) addRuntimeType(T types.Type, skip bool) {
 		for i := range mset.Len() {
 			sel := mset.At(i)
 			m := sel.Obj()
-			if m.Exported() {
+			if m.Exported() && !hasOwnTypeParams(m.(*types.Func)) {
 				// Skip methods we've already handled in the known safe context.
 				if r.currentFunction != nil && r.isInKnownSafeContext() {
 					funcName := r.currentFunction.String()
@@ -1338,7 +1412,11 @@ func (r *rta) addRuntimeType(T types.Type, skip bool) {
 		// S's methods are accessible from T.
 		r.addRuntimeType(t.Underlying(), true) // skip the unnamed type
 		for i := range t.NumMethods() {
-			r.addRuntimeType(t.Method(i).Type(), skip)
+			method := t.Method(i)
+			if hasOwnTypeParams(method) {
+				continue
+			}
+			r.addRuntimeType(method.Type(), skip)
 		}
 
 	case *types.Array:
@@ -1365,6 +1443,11 @@ func (r *rta) addRuntimeType(T types.Type, skip bool) {
 	}
 }
 
+func hasOwnTypeParams(method *types.Func) bool {
+	sig, ok := method.Type().(*types.Signature)
+	return ok && sig.TypeParams().Len() > 0
+}
+
 // Fingerprint returns a bitmask with one bit set per method id,
 // enabling 'implements' to quickly reject most candidates.
 //
@@ -1379,6 +1462,9 @@ func Fingerprint(mset *types.MethodSet) uint64 {
 	for i := range mset.Len() {
 		method := mset.At(i).Obj()
 		sig := method.Type().(*types.Signature)
+		if sig.TypeParams().Len() > 0 {
+			continue
+		}
 		sum := crc32.ChecksumIEEE(fmt.Appendf(space[:], "%s/%d/%d",
 			method.Id(),
 			sig.Params().Len(),

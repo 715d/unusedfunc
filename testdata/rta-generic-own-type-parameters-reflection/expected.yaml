@@ -1,0 +1,7 @@
+build_configurations:
+  - name: "default"
+    expected_unused:
+      - func: "github.com/715d/unusedfunc/testdata/rta-generic-own-type-parameters-reflection.T.Unused"
+        reason: "generic method not instantiated"
+      - func: "github.com/715d/unusedfunc/testdata/rta-generic-own-type-parameters-reflection.unusedControl"
+        reason: "unused control"

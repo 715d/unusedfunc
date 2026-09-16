@@ -88,8 +88,7 @@ It reports:
 		if err.Error() != "" {
 			fmt.Fprintln(os.Stderr, err.Error())
 		}
-		var cErr codedError
-		if errors.As(err, &cErr) {
+		if cErr, ok := errors.AsType[*codedError](err); ok {
 			os.Exit(cErr.code)
 		}
 		os.Exit(exitError)
@@ -300,18 +299,18 @@ func formatTextOutput(result *Result, cfg *Config) string {
 
 	for pkg, functions := range packageFunctions {
 		if len(packageFunctions) > 1 && cfg.Verbose {
-			output.WriteString(fmt.Sprintf("\n%s:\n", pkg))
+			fmt.Fprintf(&output, "\n%s:\n", pkg)
 		}
 
 		for _, f := range functions {
 			// Format: filename:line:column functionName (reason)
 			if !cfg.Verbose {
 				// Compact format for non-verbose mode.
-				output.WriteString(fmt.Sprintf("%s:%d:%d %s\n",
-					f.Position.Filename, f.Position.Line, f.Position.Column, f.Name))
+				fmt.Fprintf(&output, "%s:%d:%d %s\n",
+					f.Position.Filename, f.Position.Line, f.Position.Column, f.Name)
 			} else {
-				output.WriteString(fmt.Sprintf("  %s:%d:%d %s (%s)\n",
-					f.Position.Filename, f.Position.Line, f.Position.Column, f.Name, f.Reason))
+				fmt.Fprintf(&output, "  %s:%d:%d %s (%s)\n",
+					f.Position.Filename, f.Position.Line, f.Position.Column, f.Name, f.Reason)
 			}
 		}
 	}

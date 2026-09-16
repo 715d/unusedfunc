@@ -1,6 +1,6 @@
 # Context Files
 
-This directory is for temporary working notes and session summaries during development.
+This directory is for temporary multi-session handoff notes whose decisions, blockers, or state are not readily recoverable from code, Git, or task tracking.
 
 ## File Naming Convention
 
@@ -15,16 +15,13 @@ Examples:
 ## Maintenance Policy
 
 **Create context files** when:
-- Working on complex investigations or bugs
-- Documenting performance analysis sessions
-- Capturing temporary findings during development
+- A multi-session handoff needs non-obvious decisions, blockers, or investigation state
 
-**Delete context files** when:
-- Findings are consolidated into main documentation
-- Investigation is complete and decision is made
-- Information becomes historical (git preserves it)
+**Delete context files** after verified completion:
+- Promote durable findings to the appropriate long-lived document
+- Delete the remaining handoff note; Git preserves historical context
 
 Main documentation structure:
-- `docs/architecture.md` - Design decisions and patterns
-- `docs/workflows.md` - Commands and procedures
-- `docs/reference/` - External API docs and references
+- `docs/architecture.md` - Design decisions and non-obvious constraints
+- `docs/workflows.md` - Commands and repeatable procedures
+- `docs/reference/` - Project-specific third-party contracts and operational details

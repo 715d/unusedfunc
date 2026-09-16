@@ -34,8 +34,8 @@ type Analyzer struct {
 	// entryPoints contains all entry points for reachability analysis
 	entryPoints []*ssa.Function
 
-	// exportedTemplateObjects tracks exported generic template methods
-	// that don't have SSA functions but should be treated as entry points
+	// exportedTemplateObjects tracks public generic templates that RTA cannot use
+	// as roots but whose bodies must be retained in normal mode.
 	exportedTemplateObjects []types.Object
 
 	// nameCache is used for computing canonical names
@@ -220,10 +220,14 @@ func (sa *Analyzer) findEntryPoints() {
 					shouldAdd := !sa.strict && !isInternal
 
 					if shouldAdd {
-						// Only add if it's a function, not a method.
+						// Only add functions, not methods.
 						if fn.Object() != nil {
 							if sig, ok := fn.Object().Type().(*types.Signature); ok && sig.Recv() == nil {
-								sa.entryPoints = append(sa.entryPoints, fn)
+								if function, ok := fn.Object().(*types.Func); ok && isGenericFunction(function) {
+									sa.addExportedTemplateObject(function)
+								} else {
+									sa.entryPoints = append(sa.entryPoints, fn)
+								}
 							}
 						}
 					}
@@ -244,13 +248,10 @@ func (sa *Analyzer) findEntryPoints() {
 						for i := range mset.Len() {
 							sel := mset.At(i)
 							if sel.Obj().Exported() {
-								// Get the SSA function for this method.
-								if fn := sa.program.MethodValue(sel); fn != nil {
+								if method, ok := sel.Obj().(*types.Func); ok && isGenericFunction(method) {
+									sa.addExportedTemplateObject(method)
+								} else if fn := sa.program.MethodValue(sel); fn != nil {
 									sa.entryPoints = append(sa.entryPoints, fn)
-								} else if sel.Obj() != nil {
-									// Generic template method - no SSA function exists.
-									// Mark as entry point by adding to analysis directly.
-									sa.exportedTemplateObjects = append(sa.exportedTemplateObjects, sel.Obj())
 								}
 							}
 						}
@@ -261,15 +262,11 @@ func (sa *Analyzer) findEntryPoints() {
 						for i := range ptrMset.Len() {
 							sel := ptrMset.At(i)
 							if sel.Obj().Exported() {
-								if fn := sa.program.MethodValue(sel); fn != nil {
+								if method, ok := sel.Obj().(*types.Func); ok && isGenericFunction(method) {
+									sa.addExportedTemplateObject(method)
+								} else if fn := sa.program.MethodValue(sel); fn != nil {
 									if !slices.Contains(sa.entryPoints, fn) {
 										sa.entryPoints = append(sa.entryPoints, fn)
-									}
-								} else if sel.Obj() != nil {
-									// Generic template method - no SSA function exists.
-									// Mark as entry point by adding to analysis directly.
-									if !slices.Contains(sa.exportedTemplateObjects, sel.Obj()) {
-										sa.exportedTemplateObjects = append(sa.exportedTemplateObjects, sel.Obj())
 									}
 								}
 							}
@@ -319,188 +316,279 @@ func (sa *Analyzer) findReachableMethods() (Set[types.Object], error) {
 		return nil, fmt.Errorf("entry points not initialized")
 	}
 
-	if len(sa.entryPoints) == 0 {
+	if len(sa.entryPoints) == 0 && len(sa.exportedTemplateObjects) == 0 {
 		return nil, nil
 	}
 
-	// Filter out generic templates - RTA needs concrete instantiations, not templates with type parameters.
 	var concreteEntryPoints []*ssa.Function
 	for _, fn := range sa.entryPoints {
-		// Generic filtering logic: keep non-generic functions and instantiated generics.
-		// fn.TypeParams() == nil → non-generic function (keep)
-		// fn.Origin() != nil → instantiated generic like Container[int].Clear (keep)
-		// Both nil → uninstantiated template like Container[T].Clear (skip - not callable)
-		// This prevents analyzing template code that isn't actually instantiated.
-		if fn.TypeParams() == nil || fn.Origin() != nil {
+		if !sa.isGenericTemplate(fn) {
 			concreteEntryPoints = append(concreteEntryPoints, fn)
 		}
 	}
 
-	if len(concreteEntryPoints) == 0 {
-		return nil, nil
+	reachable := make(Set[types.Object])
+	for _, obj := range sa.exportedTemplateObjects {
+		if fn, ok := obj.(*types.Func); ok {
+			reachable[fn] = struct{}{}
+			sa.markTemplateFunctionReferences(fn, reachable, &concreteEntryPoints)
+		}
 	}
 
-	// Analyze with our fork of RTA which has been modified to be more precise.
+	if len(concreteEntryPoints) == 0 {
+		return reachable, nil
+	}
+
 	result := rta.Analyze(concreteEntryPoints)
 	if result == nil {
 		return nil, fmt.Errorf("RTA analysis failed")
 	}
 
-	// Extract reachable functions from the Reachable map directly.
-	// This avoids the overhead of building the call graph.
-	reachable := make(Set[types.Object])
-
-	// The Reachable map contains exactly the reachable functions.
-	// This includes functions marked reachable by RTA's analysis of:
-	// - Direct calls
-	// - Interface method dispatch
-	// - Type assertions (TypeAssert)
-	// - Interface conversions (MakeInterface, ChangeInterface)
-	// - Runtime.SetFinalizer functions (called by GC)
 	for fn := range result.Reachable {
 		if fn != nil && fn.Object() != nil {
 			reachable[fn.Object()] = struct{}{}
 		}
 	}
-
-	// Also add objects that were tracked without SSA functions (generic template methods)
 	for obj := range result.ReachableObjects {
 		if obj != nil {
 			reachable[obj] = struct{}{}
 		}
 	}
 
-	// Mark exported template objects as reachable (they are entry points)
-	for _, obj := range sa.exportedTemplateObjects {
-		if obj != nil {
-			reachable[obj] = struct{}{}
-			// Analyze the template method body to find calls and mark callees as reachable.
-			sa.markTemplateMethodCalls(obj, reachable)
-		}
-	}
-
 	return reachable, nil
 }
 
-// markTemplateMethodCalls analyzes a generic template method using AST to find and mark
-// actual method calls as reachable. This handles the case where SSA doesn't have the
-// template body available for analysis.
-func (sa *Analyzer) markTemplateMethodCalls(methodObj types.Object, reachable Set[types.Object]) {
-	// Find the AST for this method.
-	fn, ok := methodObj.(*types.Func)
-	if !ok {
-		return
-	}
-
-	sig := fn.Type().(*types.Signature)
-	recv := sig.Recv()
-	if recv == nil {
-		return // Not a method.
-	}
-
-	pkg := methodObj.Pkg()
-	if pkg == nil {
+// markTemplateFunctionReferences follows typed function references from an
+// uninstantiated public generic template. Concrete references become RTA roots.
+func (sa *Analyzer) markTemplateFunctionReferences(fn *types.Func, reachable Set[types.Object], concreteRoots *[]*ssa.Function) {
+	if fn == nil || fn.Pkg() == nil {
 		return
 	}
 
 	var targetPkg *packages.Package
-	for _, p := range sa.packages {
-		if p.Types == pkg {
-			targetPkg = p
+	for _, pkg := range sa.packages {
+		if pkg.Types == fn.Pkg() {
+			targetPkg = pkg
 			break
 		}
 	}
-	if targetPkg == nil {
+	if targetPkg == nil || targetPkg.TypesInfo == nil {
 		return
 	}
 
-	methodName := fn.Name()
-	recvType := recv.Type()
+	for _, file := range targetPkg.Syntax {
+		ast.Inspect(file, func(node ast.Node) bool {
+			funcDecl, ok := node.(*ast.FuncDecl)
+			if !ok || funcDecl.Name.Pos() != fn.Pos() {
+				return true
+			}
+			if funcDecl.Body == nil {
+				return false
+			}
+
+			info := targetPkg.TypesInfo
+			var visitBody func(*ast.BlockStmt, *types.Signature)
+			visitBody = func(body *ast.BlockStmt, sig *types.Signature) {
+				ast.Inspect(body, func(node ast.Node) bool {
+					switch node := node.(type) {
+					case *ast.FuncLit:
+						literalSig, _ := info.TypeOf(node).(*types.Signature)
+						visitBody(node.Body, literalSig)
+						return false
+					case *ast.Ident:
+						callee, _ := info.Uses[node].(*types.Func)
+						if callee != nil {
+							sa.markTemplateFunctionReference(callee, reachable, concreteRoots)
+						}
+					case *ast.CallExpr:
+						sa.markTemplateCallInterfaceArguments(node, info, reachable, concreteRoots)
+					case *ast.AssignStmt:
+						sa.markTemplateInterfaceAssignments(node.Lhs, node.Rhs, info, reachable, concreteRoots)
+					case *ast.ValueSpec:
+						sa.markTemplateInterfaceValueSpec(node, info, reachable, concreteRoots)
+					case *ast.ReturnStmt:
+						if sig != nil {
+							sa.markTemplateInterfaceResults(node.Results, sig.Results(), info, reachable, concreteRoots)
+						}
+					}
+					return true
+				})
+			}
+			templateSig, _ := fn.Type().(*types.Signature)
+			visitBody(funcDecl.Body, templateSig)
+			return false
+		})
+	}
+}
+
+func (sa *Analyzer) markTemplateCallInterfaceArguments(call *ast.CallExpr, info *types.Info, reachable Set[types.Object], concreteRoots *[]*ssa.Function) {
+	if typeAndValue, ok := info.Types[call.Fun]; ok && typeAndValue.IsType() {
+		if len(call.Args) == 1 {
+			sa.markTemplateInterfaceImplementation(info.TypeOf(call.Args[0]), info.TypeOf(call), reachable, concreteRoots)
+		}
+		return
+	}
+
+	funType := info.TypeOf(call.Fun)
+	if funType == nil {
+		return
+	}
+	sig, ok := funType.Underlying().(*types.Signature)
+	if !ok || sig.Params() == nil {
+		return
+	}
+
+	for i, arg := range call.Args {
+		paramIndex := i
+		if paramIndex >= sig.Params().Len() {
+			if !sig.Variadic() {
+				break
+			}
+			paramIndex = sig.Params().Len() - 1
+		}
+		if paramIndex < 0 {
+			break
+		}
+
+		paramType := sig.Params().At(paramIndex).Type()
+		if sig.Variadic() && i >= sig.Params().Len()-1 && !call.Ellipsis.IsValid() {
+			slice, ok := types.Unalias(paramType).Underlying().(*types.Slice)
+			if !ok {
+				continue
+			}
+			paramType = slice.Elem()
+		}
+		sa.markTemplateInterfaceImplementation(info.TypeOf(arg), paramType, reachable, concreteRoots)
+	}
+}
+
+func (sa *Analyzer) markTemplateInterfaceAssignments(lhs, rhs []ast.Expr, info *types.Info, reachable Set[types.Object], concreteRoots *[]*ssa.Function) {
+	if len(lhs) != len(rhs) {
+		return
+	}
+	for i := range lhs {
+		sa.markTemplateInterfaceImplementation(info.TypeOf(rhs[i]), info.TypeOf(lhs[i]), reachable, concreteRoots)
+	}
+}
+
+func (sa *Analyzer) markTemplateInterfaceValueSpec(spec *ast.ValueSpec, info *types.Info, reachable Set[types.Object], concreteRoots *[]*ssa.Function) {
+	if len(spec.Names) != len(spec.Values) {
+		return
+	}
+	for i, name := range spec.Names {
+		targetType := info.TypeOf(name)
+		if targetType == nil && spec.Type != nil {
+			targetType = info.TypeOf(spec.Type)
+		}
+		sa.markTemplateInterfaceImplementation(info.TypeOf(spec.Values[i]), targetType, reachable, concreteRoots)
+	}
+}
+
+func (sa *Analyzer) markTemplateInterfaceResults(values []ast.Expr, results *types.Tuple, info *types.Info, reachable Set[types.Object], concreteRoots *[]*ssa.Function) {
+	if len(values) != results.Len() {
+		return
+	}
+	for i := range values {
+		sa.markTemplateInterfaceImplementation(info.TypeOf(values[i]), results.At(i).Type(), reachable, concreteRoots)
+	}
+}
+
+func (sa *Analyzer) markTemplateInterfaceImplementation(concreteType, interfaceType types.Type, reachable Set[types.Object], concreteRoots *[]*ssa.Function) {
+	if concreteType == nil || interfaceType == nil {
+		return
+	}
+
+	iface, ok := types.Unalias(interfaceType).Underlying().(*types.Interface)
+	if !ok || iface.Empty() {
+		return
+	}
+	if _, ok := types.Unalias(concreteType).Underlying().(*types.Interface); ok {
+		return
+	}
+	iface.Complete()
+	if !types.Implements(concreteType, iface) {
+		return
+	}
+
+	methodSet := sa.program.MethodSets.MethodSet(concreteType)
+	for i := range iface.NumMethods() {
+		interfaceMethod := iface.Method(i)
+		if sel := methodSet.Lookup(interfaceMethod.Pkg(), interfaceMethod.Name()); sel != nil {
+			sa.markTemplateFunctionReference(sel.Obj().(*types.Func), reachable, concreteRoots)
+		}
+	}
+}
+
+func (sa *Analyzer) markTemplateFunctionReference(fn *types.Func, reachable Set[types.Object], concreteRoots *[]*ssa.Function) {
+	if _, exists := reachable[fn]; exists {
+		return
+	}
+	reachable[fn] = struct{}{}
+
+	if isGenericFunction(fn) {
+		sa.markTemplateFunctionReferences(fn, reachable, concreteRoots)
+		return
+	}
+
+	ssaFn := sa.getSSAFunction(fn)
+	if ssaFn != nil && !slices.Contains(*concreteRoots, ssaFn) {
+		*concreteRoots = append(*concreteRoots, ssaFn)
+	}
+}
+
+func (sa *Analyzer) addExportedTemplateObject(obj types.Object) {
+	if obj != nil && !slices.Contains(sa.exportedTemplateObjects, obj) {
+		sa.exportedTemplateObjects = append(sa.exportedTemplateObjects, obj)
+	}
+}
+
+func isGenericFunction(fn *types.Func) bool {
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok {
+		return false
+	}
+	if sig.TypeParams().Len() > 0 {
+		return true
+	}
+	if sig.Recv() == nil {
+		return false
+	}
+
+	recvType := sig.Recv().Type()
 	if ptr, ok := recvType.(*types.Pointer); ok {
 		recvType = ptr.Elem()
 	}
+	named, ok := recvType.(*types.Named)
+	if !ok {
+		return false
+	}
+	if named.TypeParams().Len() > 0 {
+		return true
+	}
+	for i := range named.TypeArgs().Len() {
+		if _, ok := named.TypeArgs().At(i).(*types.TypeParam); ok {
+			return true
+		}
+	}
+	return false
+}
 
-	// Get receiver type name.
-	var recvTypeName string
-	if named, ok := recvType.(*types.Named); ok {
-		recvTypeName = named.Obj().Name()
-	} else {
-		return
+func (sa *Analyzer) isGenericTemplate(fn *ssa.Function) bool {
+	if fn == nil || fn.TypeParams().Len() == 0 {
+		return false
+	}
+	if fn.Origin() == nil {
+		return true
 	}
 
-	// Walk AST to find the method declaration and analyze its calls.
-	for _, file := range targetPkg.Syntax {
-		ast.Inspect(file, func(n ast.Node) bool {
-			funcDecl, ok := n.(*ast.FuncDecl)
-			if !ok || funcDecl.Name.Name != methodName {
-				return true
-			}
-
-			// Check if this is a method with the right receiver.
-			if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
-				return true
-			}
-
-			// Extract receiver type name from AST.
-			var astRecvName string
-			switch t := funcDecl.Recv.List[0].Type.(type) {
-			case *ast.StarExpr:
-				if ident, ok := t.X.(*ast.Ident); ok {
-					astRecvName = ident.Name
-				} else if idx, ok := t.X.(*ast.IndexExpr); ok {
-					if ident, ok := idx.X.(*ast.Ident); ok {
-						astRecvName = ident.Name
-					}
-				} else if idx, ok := t.X.(*ast.IndexListExpr); ok {
-					if ident, ok := idx.X.(*ast.Ident); ok {
-						astRecvName = ident.Name
-					}
-				}
-			case *ast.Ident:
-				astRecvName = t.Name
-			case *ast.IndexExpr:
-				if ident, ok := t.X.(*ast.Ident); ok {
-					astRecvName = ident.Name
-				}
-			case *ast.IndexListExpr:
-				if ident, ok := t.X.(*ast.Ident); ok {
-					astRecvName = ident.Name
-				}
-			}
-
-			if astRecvName != recvTypeName {
-				return true
-			}
-
-			// Found the method - now analyze calls in its body.
-			ast.Inspect(funcDecl.Body, func(n2 ast.Node) bool {
-				callExpr, ok := n2.(*ast.CallExpr)
-				if !ok {
-					return true
-				}
-
-				// Check if this is a method call.
-				selExpr, ok := callExpr.Fun.(*ast.SelectorExpr)
-				if !ok {
-					return true
-				}
-
-				// Look up the called method in TypesInfo.
-				if calleeObj := targetPkg.TypesInfo.Uses[selExpr.Sel]; calleeObj != nil {
-					if calleeFn, ok := calleeObj.(*types.Func); ok {
-						// Mark as reachable and recurse.
-						if _, exists := reachable[calleeFn]; !exists {
-							reachable[calleeFn] = struct{}{}
-							sa.markTemplateMethodCalls(calleeFn, reachable)
-						}
-					}
-				}
-				return true
-			})
-
-			return false // Found the method, stop searching
-		})
+	// A generic receiver may be represented as an instantiation whose type
+	// argument is still a type parameter, so RTA cannot traverse its body.
+	for _, typeArg := range fn.TypeArgs() {
+		if _, ok := typeArg.(*types.TypeParam); ok {
+			return true
+		}
 	}
+	return false
 }
 
 // addRuntimeDirectiveFunctions adds functions with runtime directives as entry points
