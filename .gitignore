@@ -68,3 +68,4 @@ local/
 # Nix build artifacts
 result
 result-*
+.codegraph/

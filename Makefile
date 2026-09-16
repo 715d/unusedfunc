@@ -29,22 +29,16 @@ deps: ## Download and verify dependencies
 	@go mod verify
 	@go mod tidy
 
-.PHONY: tools
-tools: ## Install development tools
-	@go install github.com/goreleaser/goreleaser/v2@latest
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	@go install golang.org/x/tools/cmd/goimports@latest
-
 .PHONY: fmt
 fmt: ## Format code with gofmt and goimports
-	@goimports -w -local $(PACKAGE) .
+	@go tool goimports -w -local $(PACKAGE) .
 
 .PHONY: lint
 lint: ## Run linters
-	@golangci-lint run ./...
+	@go tool golangci-lint run ./...
 
 .PHONY: check
-check: format lint ## Run all code quality checks
+check: fmt lint ## Run all code quality checks
 
 .PHONY: build
 build: ## Build the binary

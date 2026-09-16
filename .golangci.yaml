@@ -1,8 +1,6 @@
 version: "2"
-
 issues:
   max-same-issues: 20
-
 linters:
   enable:
     - asasalint # checks for pass []any as any in variadic func(...any)
@@ -47,13 +45,13 @@ linters:
     - usestdlibvars # detects the possibility to use variables/constants from the Go standard library
     - usetesting # reports uses of functions with replacement inside the testing package
     - wastedassign # finds wasted assignment statements
-
   settings:
+    goconst:
+      ignore-tests: true
     gochecksumtype:
       # Presence of `default` case in switch statements satisfies exhaustiveness, if all members are not listed.
       # Default: true
       default-signifies-exhaustive: false
-
   exclusions:
     warn-unused: true
     presets:
@@ -62,3 +60,5 @@ linters:
       - common-false-positives
     paths:
       - internal/rta
+      # Analyzer inputs deliberately contain unused declarations and non-idiomatic patterns.
+      - testdata

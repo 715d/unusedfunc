@@ -6,14 +6,9 @@ Thank you for contributing to unusedfunc! This document provides guidelines for 
 
 ### Prerequisites
 
-- Go 1.25 or later
-- golangci-lint (for linting)
-- goimports (for formatting)
+- Go matching the version in [`go.mod`](go.mod), or automatic toolchain downloads enabled
 
-Install development tools:
-```bash
-make tools
-```
+Development tools are declared in `go.mod` and downloaded and built automatically by `go tool`. No separate installation is needed; the Makefile and CI use the same module-selected tools.
 
 ### Building
 
@@ -98,9 +93,10 @@ Releases are automated via GitHub Actions and GoReleaser.
    - Builds binaries for:
      - macOS (Intel and Apple Silicon)
      - Linux (amd64 and arm64)
-     - Windows (amd64)
+     - Windows (amd64 and arm64)
    - Creates GitHub release with auto-generated changelog
-   - Updates Homebrew formula in `Formula/unusedfunc.rb`
+   - Updates the Homebrew cask in `Casks/unusedfunc.rb`
+   - Updates `pkgs/unusedfunc/default.nix` in `715d/nur` (requires the `NIX_GITHUB_TOKEN` repository secret)
 
 4. **Verify the release**
    - Check GitHub releases page: https://github.com/715d/unusedfunc/releases
@@ -116,11 +112,8 @@ Releases are automated via GitHub Actions and GoReleaser.
 Test the release process without publishing:
 
 ```bash
-# Install GoReleaser if not already installed
-go install github.com/goreleaser/goreleaser/v2@latest
-
 # Run snapshot build (no publish, no tag validation)
-goreleaser release --snapshot --clean
+go tool goreleaser release --snapshot --clean
 
 # Binaries will be in dist/ directory
 ls -la dist/
@@ -168,7 +161,8 @@ Each release includes:
 - **Archives:** tar.gz (macOS/Linux), zip (Windows)
 - **Checksums:** SHA256 checksums in `checksums.txt`
 - **Source code:** Automatic GitHub archives
-- **Homebrew formula:** Auto-updated in repository
+- **Homebrew cask:** Auto-updated in repository
+- **NUR package:** Auto-updated in `715d/nur`
 
 ## Questions?
 
