@@ -31,7 +31,7 @@ jobs:
       - name: Run tests with coverage
         run: make test
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: ./build/coverage.out
           flags: unittests
